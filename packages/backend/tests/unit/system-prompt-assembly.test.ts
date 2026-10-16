@@ -133,7 +133,7 @@ async function seedApp(
   mcaId: string,
   appName: string,
   context: string | undefined,
-  opts: { workspaceId?: string; mcaName?: string } = {},
+  opts: { workspaceId?: string; mcaName?: string; agentInstructions?: string } = {},
 ) {
   const ws = opts.workspaceId ?? WORKSPACE_ID
   await db.collection('apps').insertOne({
@@ -159,6 +159,7 @@ async function seedApp(
     description: 'desc',
     status: 'active',
     availability: { enabled: true, multi: true, system: false, hidden: false, role: 'user' },
+    ...(opts.agentInstructions ? { agentInstructions: opts.agentInstructions } : {}),
     tools: [],
   })
 }
@@ -373,6 +374,28 @@ describe('inyección de app_instructions', () => {
     const prompt = await getPrompt()
     expect(prompt).toContain('<app_instructions app="Con Instrucciones" mca="mca.notion">\nInstrucción A.\n</app_instructions>')
     expect(prompt).not.toContain('Sin Instrucciones')
+  })
+
+  it('guía del MCA (agentInstructions) sin context → bloque con la guía, {{app}} sustituido', async () => {
+    await seedAgent()
+    await seedApp('app_pc', 'mca.teros.computer', 'computer-iria', undefined, {
+      agentInstructions: 'Start with {{app}}_get-state.',
+    })
+
+    const prompt = await getPrompt()
+    expect(prompt).toContain(
+      '<app_instructions app="computer-iria" mca="mca.teros.computer">\nStart with computer-iria_get-state.\n</app_instructions>',
+    )
+  })
+
+  it('guía del MCA + context del usuario → guía primero, luego el context', async () => {
+    await seedAgent()
+    await seedApp('app_pc2', 'mca.teros.computer', 'pc', 'Usa siempre el perfil de trabajo.', {
+      agentInstructions: 'Guía {{app}}.',
+    })
+
+    const prompt = await getPrompt()
+    expect(prompt).toContain('<app_instructions app="pc" mca="mca.teros.computer">\nGuía pc.\n\nUsa siempre el perfil de trabajo.\n</app_instructions>')
   })
 
   it('ORDEN canónico: app_instructions va DESPUÉS de <project> y ANTES de <context>', async () => {

@@ -319,6 +319,7 @@ function manifestToCatalogEntry(
     system: manifest.availability.system,
     hidden: manifest.availability.hidden ?? false,
     role: manifest.availability.role,
+    ...(manifest.availability.perAgent ? { perAgent: true } : {}),
   }
 
   // Extract auth and secrets from layers
@@ -363,11 +364,32 @@ function manifestToCatalogEntry(
     verified: manifest.verified,
     homepage: manifest.homepage ?? manifest.author?.url,
     runtime: manifest.runtime,
+    agentInstructions: readAgentInstructions(mcaDir, manifest.agentInstructions),
     i18n: mcaI18n,
     status: availability.enabled ? "active" : "disabled",
     createdAt: now,
     updatedAt: now,
   }
+}
+
+/** Hard cap: the guide is paid on every turn of every agent that has the app. */
+const AGENT_INSTRUCTIONS_MAX_CHARS = 6000
+
+/**
+ * Load the MCA's agent guide (manifest `agentInstructions`, a markdown file in
+ * the MCA dir). Missing or oversized files fail the sync: a silently dropped
+ * guide leaves agents driving the tools blind.
+ */
+function readAgentInstructions(mcaDir: string, file: string | undefined): string | undefined {
+  if (!file) return undefined
+  const fullPath = join(MCAS_DIR, mcaDir, file)
+  const text = readFileSync(fullPath, "utf-8").trim()
+  if (text.length > AGENT_INSTRUCTIONS_MAX_CHARS) {
+    throw new Error(
+      `${mcaDir}/${file} is ${text.length} chars; agentInstructions max is ${AGENT_INSTRUCTIONS_MAX_CHARS}`,
+    )
+  }
+  return text
 }
 
 /**

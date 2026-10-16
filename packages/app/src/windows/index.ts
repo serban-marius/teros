@@ -16,6 +16,7 @@ import { fileViewerWindowDefinition } from './FileViewerWindow';
 import { fileBrowserWindowDefinition } from './FileBrowserWindow';
 import { markdownViewerWindowDefinition } from './MarkdownViewerWindow';
 import { browserbaseWindowDefinition } from './BrowserbaseWindow';
+import { computerWindowDefinition } from './ComputerWindow';
 import { skillsWindowDefinition } from './SkillsWindow';
 import { projectWindowDefinition } from './ProjectWindow';
 // import { uiTestWindowDefinition } from './UITestWindow/definition';
@@ -124,6 +125,7 @@ export function registerAllWindowTypes(): void {
 
   // Browserbase Live View (cloud browser session viewer)
   windowRegistry.register(browserbaseWindowDefinition);
+  windowRegistry.register(computerWindowDefinition);
 
   // Skills (workspace-level reusable instruction blocks)
   windowRegistry.register(skillsWindowDefinition);
@@ -165,6 +167,7 @@ export * from './MarkdownViewerWindow';
 export * from './CodeEditorWindow';
 export * from './TerminalWindow';
 export * from './BrowserbaseWindow';
+export * from './ComputerWindow';
 export * from './SkillsWindow';
 export * from './ProjectWindow';
 export * from './MonitoringWindow';

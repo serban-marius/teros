@@ -1,0 +1,380 @@
+{
+  "$schema": "https://teros.ai/schemas/mca-tools.json",
+  "mcaId": "mca.teros.computer",
+  "tools": [
+    {
+      "name": "-health-check",
+      "description": "Check that the desktop and browser are up.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "get-state",
+      "description": "Look at your computer: who is in control, the focused window, the browser tab and an accessibility snapshot of the page with element refs ([ref=e12]) to use with click/type-text/scroll. Start every task with this. Set screenshot=true when you need pixels (dialogs, canvas, images, layout).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "screenshot": {
+            "type": "boolean",
+            "description": "Also attach a screenshot (default false)."
+          },
+          "maxChars": {
+            "type": "number",
+            "description": "Max snapshot length in characters (default 12000)."
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "screenshot",
+      "description": "Screenshot of the whole screen (JPEG, downscaled). Coordinates you then pass to click/scroll/drag are pixels of THIS image; scaling to the real screen is automatic. Prefer get-state (text) when the target is in the web page.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "number",
+            "description": "Image width in px, 320-1280 (default 1024)."
+          },
+          "quality": {
+            "type": "number",
+            "description": "JPEG quality 20-90 (default 60)."
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "click",
+      "description": "Click an element by ref (from the latest snapshot) or at x,y (pixels of the latest screenshot). Returns the fresh state. Ref clicks are delivered to the element; coordinate clicks are synthetic input — check the returned state.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "description": "Element ref from the latest snapshot, e.g. \"e12\". Preferred over coordinates for anything in the web page."
+          },
+          "x": {
+            "type": "number",
+            "description": "X in pixels of the LATEST SCREENSHOT (scaled to screen automatically). Use when there is no ref."
+          },
+          "y": {
+            "type": "number",
+            "description": "Y in pixels of the latest screenshot."
+          },
+          "button": {
+            "type": "string",
+            "enum": [
+              "left",
+              "middle",
+              "right"
+            ],
+            "description": "Mouse button (default left)."
+          },
+          "double": {
+            "type": "boolean",
+            "description": "Double-click."
+          },
+          "modifiers": {
+            "type": "string",
+            "description": "Held keys, e.g. \"ctrl\" or \"ctrl+shift\"."
+          },
+          "observe": {
+            "type": "string",
+            "enum": [
+              "snapshot",
+              "summary",
+              "screenshot",
+              "none"
+            ],
+            "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
+          }
+        }
+      }
+    },
+    {
+      "name": "type-text",
+      "description": "Type text. With ref: fills that field (replacing its content unless clear=false) and reads it back (verified). Without ref: types into whatever has keyboard focus (unverified). Never type passwords or other secrets: ask the user to take over and type them.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Text to type."
+          },
+          "ref": {
+            "type": "string",
+            "description": "Element ref from the latest snapshot, e.g. \"e12\". Preferred over coordinates for anything in the web page."
+          },
+          "clear": {
+            "type": "boolean",
+            "description": "With ref: replace existing content (default true)."
+          },
+          "submit": {
+            "type": "boolean",
+            "description": "Press Enter afterwards."
+          },
+          "observe": {
+            "type": "string",
+            "enum": [
+              "snapshot",
+              "summary",
+              "screenshot",
+              "none"
+            ],
+            "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "press-key",
+      "description": "Press keys on the focused window: one key or chord, or several separated by spaces. Examples: \"Enter\", \"Escape\", \"Tab\", \"ctrl+l\", \"ctrl+shift+t\", \"ctrl+a Delete\", \"PageDown\".",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "keys": {
+            "type": "string",
+            "description": "Key or chords, space-separated."
+          },
+          "observe": {
+            "type": "string",
+            "enum": [
+              "snapshot",
+              "summary",
+              "screenshot",
+              "none"
+            ],
+            "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
+          }
+        },
+        "required": [
+          "keys"
+        ]
+      }
+    },
+    {
+      "name": "scroll",
+      "description": "Scroll the page or the element under a ref / point. amount is in wheel notches (~100 px each, default 5).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "direction": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "left",
+              "right"
+            ],
+            "description": "Scroll direction."
+          },
+          "amount": {
+            "type": "number",
+            "description": "Wheel notches, 1-50 (default 5)."
+          },
+          "ref": {
+            "type": "string",
+            "description": "Element ref from the latest snapshot, e.g. \"e12\". Preferred over coordinates for anything in the web page."
+          },
+          "x": {
+            "type": "number",
+            "description": "X in pixels of the LATEST SCREENSHOT (scaled to screen automatically). Use when there is no ref."
+          },
+          "y": {
+            "type": "number",
+            "description": "Y in pixels of the latest screenshot."
+          },
+          "observe": {
+            "type": "string",
+            "enum": [
+              "snapshot",
+              "summary",
+              "screenshot",
+              "none"
+            ],
+            "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
+          }
+        },
+        "required": [
+          "direction"
+        ]
+      }
+    },
+    {
+      "name": "drag",
+      "description": "Drag with the left button from one point to another (pixels of the latest screenshot).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "fromX": {
+            "type": "number",
+            "description": "Start X."
+          },
+          "fromY": {
+            "type": "number",
+            "description": "Start Y."
+          },
+          "toX": {
+            "type": "number",
+            "description": "End X."
+          },
+          "toY": {
+            "type": "number",
+            "description": "End Y."
+          },
+          "observe": {
+            "type": "string",
+            "enum": [
+              "snapshot",
+              "summary",
+              "screenshot",
+              "none"
+            ],
+            "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
+          }
+        },
+        "required": [
+          "fromX",
+          "fromY",
+          "toX",
+          "toY"
+        ]
+      }
+    },
+    {
+      "name": "open-url",
+      "description": "Open a URL in the desktop browser (starts it if closed), in the current tab or a new one. Waits for the page to load and returns its snapshot.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "http(s) URL; \"example.com\" becomes https://example.com."
+          },
+          "newTab": {
+            "type": "boolean",
+            "description": "Open in a new tab (default false)."
+          },
+          "observe": {
+            "type": "string",
+            "enum": [
+              "snapshot",
+              "summary",
+              "screenshot",
+              "none"
+            ],
+            "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
+          }
+        },
+        "required": [
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "tabs",
+      "description": "List, switch to, close or open browser tabs. Tab indexes come from action=list.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "list",
+              "switch",
+              "close",
+              "new"
+            ],
+            "description": "What to do (default list)."
+          },
+          "index": {
+            "type": "number",
+            "description": "Tab index for switch/close."
+          },
+          "url": {
+            "type": "string",
+            "description": "URL for action=new (optional)."
+          }
+        }
+      }
+    },
+    {
+      "name": "wait",
+      "description": "Wait for some text to appear in the page (preferred) or for a fixed time, then return the state.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Wait until this text is visible in the page."
+          },
+          "ms": {
+            "type": "number",
+            "description": "Or wait this many milliseconds (max 30000)."
+          },
+          "timeoutMs": {
+            "type": "number",
+            "description": "Max wait for text (default 15000, max 60000)."
+          },
+          "observe": {
+            "type": "string",
+            "enum": [
+              "snapshot",
+              "summary",
+              "screenshot",
+              "none"
+            ],
+            "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "run-command",
+      "description": "Run a shell command on your computer as its user (bash, in the home directory) and get stdout/stderr. For files (e.g. ~/Downloads), quick checks and scripts. Not root: no system package installs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Shell command."
+          },
+          "timeoutMs": {
+            "type": "number",
+            "description": "Timeout, default 30000, max 300000."
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "control-status",
+      "description": "Who is driving this computer right now: you (agent) or a person who took over from the live view. While a person is in control your input tools fail with human_has_control.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    }
+  ]
+}

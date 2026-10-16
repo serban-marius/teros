@@ -41,6 +41,13 @@ export const MCAAvailabilitySchema = z.object({
   hidden: z.boolean().default(false),
   /** Minimum role required to use this MCA */
   role: MCARoleSchema,
+  /**
+   * One instance per agent instead of one per owner: auto-provisioning
+   * (system / core defaultApps) creates a dedicated app for EACH agent and
+   * grants it only to that agent (e.g. each agent's own computer).
+   * Requires multi: true and containerMode: 'per-app'.
+   */
+  perAgent: z.boolean().optional(),
 });
 export type MCAAvailability = z.infer<typeof MCAAvailabilitySchema>;
 
@@ -335,6 +342,19 @@ export const MCARuntimeSchema = z.object({
    */
   workspaceMount: z.boolean().optional(),
   /**
+   * Private persistent volume per app instance, mounted at `containerPath`.
+   * A named Docker volume (`teros-app-<appId>`) on the execution host: it
+   * survives container removal, idle stops and backend restarts, and unlike
+   * appDataMount it is NOT inside the shared workspace volume, so other MCAs
+   * of the workspace cannot read it (e.g. a browser profile with logins).
+   * Requires containerMode: 'per-app'.
+   */
+  appVolume: z
+    .object({
+      containerPath: z.string().regex(/^\/[a-zA-Z0-9_.\/-]+$/, 'containerPath must be an absolute path'),
+    })
+    .optional(),
+  /**
    * Container resource limits (Docker: --cpus / --memory).
    * When omitted, the backend-wide defaults apply (MCA_CONTAINER_CPUS /
    * MCA_CONTAINER_MEMORY_MB env vars). Set only for MCAs that genuinely need
@@ -447,6 +467,15 @@ export const MCAManifestSchema = z.object({
   /** Runtime configuration (required for HTTP transport MCAs) */
   runtime: MCARuntimeSchema.optional(),
 
+  /**
+   * Markdown file (relative to the MCA directory) with usage guidance for
+   * agents. Synced into the catalog and injected into the system prompt of
+   * every agent that has an instance of this MCA, inside its
+   * <app_instructions> block, before any user-written app context.
+   * Keep it short: it is paid on every turn.
+   */
+  agentInstructions: z.string().regex(/^[a-zA-Z0-9_.-]+\.md$/).optional(),
+
   /** Search keywords */
   keywords: z.array(z.string()).optional(),
 
@@ -530,7 +559,26 @@ export const MCAManifestRefinedSchema = MCAManifestSchema.superRefine((manifest,
     });
   }
 
-  // Rule 4: System MCAs should be hidden or have explicit reason
+  // Rule 4: per-agent instances and private app volumes need one container per app
+  if (manifest.availability.perAgent && !manifest.availability.multi) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'availability.perAgent requires availability.multi: true (one instance per agent)',
+      path: ['availability', 'perAgent'],
+    });
+  }
+  if (
+    (manifest.availability.perAgent || manifest.runtime.appVolume) &&
+    manifest.runtime.containerMode !== 'per-app'
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'availability.perAgent and runtime.appVolume require containerMode: "per-app"',
+      path: ['runtime', 'containerMode'],
+    });
+  }
+
+  // Rule 5: System MCAs should be hidden or have explicit reason
   if (
     manifest.availability.system &&
     !manifest.availability.hidden &&
@@ -540,7 +588,7 @@ export const MCAManifestRefinedSchema = MCAManifestSchema.superRefine((manifest,
     // But we could add a soft warning here
   }
 
-  // Rule 5: Entrypoint must have valid extension
+  // Rule 6: Entrypoint must have valid extension
   const validExtensions = ['.ts', '.js', '.mjs'];
   const hasValidExtension = validExtensions.some((ext) => manifest.entrypoint.endsWith(ext));
   if (!hasValidExtension) {

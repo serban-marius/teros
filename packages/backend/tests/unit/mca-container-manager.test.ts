@@ -10,6 +10,10 @@
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test'
+
+// Container names must not depend on a developer's local .env (preload loads it).
+delete process.env.MCA_CONTAINER_PREFIX
+delete process.env.MCA_PORT_RANGE
 import type {
   ContainerInfo,
   ContainerStartOptions,
@@ -204,6 +208,28 @@ describe('claves y nombres de contenedor', () => {
     expect(backend.start.mock.calls[0][1]).toBe('mca-teros-bash-89abcdef')
     expect(manager.getInfo(APP_ID)).toBeDefined()
     expect(manager.getInfo(MCA_ID)).toBeUndefined()
+  })
+
+  it('MCA_CONTAINER_PREFIX se antepone al nombre (dos stacks en un mismo daemon)', async () => {
+    process.env.MCA_CONTAINER_PREFIX = 'dev-'
+    try {
+      const backend = makeBackend()
+      const manager = makeManager(backend)
+      await manager.getOrStart(MCA_ID, { containerMode: 'per-app', appId: APP_ID })
+      expect(backend.start.mock.calls[0][1]).toBe('dev-mca-teros-bash-89abcdef')
+    } finally {
+      delete process.env.MCA_CONTAINER_PREFIX
+    }
+  })
+
+  it('MCA_CONTAINER_PREFIX inválido se rechaza', async () => {
+    process.env.MCA_CONTAINER_PREFIX = 'bad prefix;'
+    try {
+      const manager = makeManager(makeBackend())
+      await expect(manager.getOrStart(MCA_ID, { containerMode: 'shared' })).rejects.toThrow('MCA_CONTAINER_PREFIX')
+    } finally {
+      delete process.env.MCA_CONTAINER_PREFIX
+    }
   })
 
   it('per-app SIN appId degrada a clave shared', async () => {

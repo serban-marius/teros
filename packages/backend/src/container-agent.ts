@@ -16,6 +16,8 @@
  *   MCA_BASE_PATH          (required) mcas/ directory, as in the backend
  *   BACKEND_PORT           core port for MCA callback URLs (default 3000)
  *   MCA_CONTAINER_CPUS / MCA_CONTAINER_MEMORY_MB / MCA_HOST_GATEWAY as usual
+ *   MCA_PORT_RANGE         host port range for MCA containers (default 13000-13999)
+ *   MCA_CONTAINER_PREFIX   container name prefix (default none; must match the core's)
  */
 
 import { config as dotenvConfig } from 'dotenv';
@@ -29,6 +31,7 @@ const entryDir = dirname(resolve(process.argv[1] ?? '.'));
 dotenvConfig({ path: resolve(entryDir, '..', '.env') });
 dotenvConfig({ path: resolve(entryDir, '..', '..', '..', '.env') });
 
+import { mcaContainerPrefix } from './services/container-backend';
 import { createContainerAgentServer } from './services/container-agent-server';
 import { createDockerContainerBackend } from './services/docker-backend-factory';
 import { execDocker } from './services/docker-container-backend';
@@ -54,7 +57,7 @@ const backend = createDockerContainerBackend({ mcaBasePath, backendPort });
 /** Live mca-* containers on this agent's Docker daemon (for GET /v1/status). */
 async function listContainers(): Promise<Array<{ name: string; status: string }>> {
   const result = await execDocker(
-    ['ps', '--filter', 'name=^mca-', '--format', '{{.Names}}\t{{.Status}}'],
+    ['ps', '--filter', `name=^${mcaContainerPrefix()}mca-`, '--format', '{{.Names}}\t{{.Status}}'],
     { timeoutMs: 15_000 },
   );
   if (result.status !== 0) return [];

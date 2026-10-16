@@ -1,0 +1,53 @@
+{
+  "$schema": "https://teros.ai/schemas/mca-manifest.json",
+  "id": "mca.teros.computer",
+  "name": "Computer",
+  "version": "1.0.0",
+  "description": "Gives an agent its own persistent Linux desktop with a real browser. The agent sees and drives it (screen, accessibility tree, mouse, keyboard); you can watch live and take over to log into any website, and the session stays logged in across restarts.",
+  "type": "utility",
+  "icon": "icon.png",
+  "category": "productivity",
+  "entrypoint": "src/index.ts",
+  "agentInstructions": "AGENT.md",
+  "author": {
+    "name": "Teros",
+    "email": "hello@teros.ai"
+  },
+  "availability": {
+    "enabled": true,
+    "multi": true,
+    "system": false,
+    "hidden": false,
+    "role": "user",
+    "perAgent": true
+  },
+  "runtime": {
+    "transport": "http",
+    "containerMode": "per-app",
+    "dockerImage": "teros/mca-runtime-computer",
+    "appVolume": {
+      "containerPath": "/home/teros"
+    },
+    "resources": {
+      "cpus": 1,
+      "memoryMb": 1536
+    }
+  },
+  "keywords": ["computer", "desktop", "browser", "linux", "vnc", "computer-use", "login"],
+  "tagline": "Your agent's own Linux computer with a browser you can log into",
+  "layers": {
+    "tools": true,
+    "events": false,
+    "ui": true,
+    "permissions": false,
+    "auth": false,
+    "agent": false
+  },
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2026-10-17",
+      "notes": "Initial release — a persistent desktop and browser per agent, live view with take-over, and computer-use tools"
+    }
+  ]
+}

@@ -880,7 +880,8 @@
     "splitBottom": "아래 분할",
     "splitHorizontal": "가로 분할",
     "splitVertical": "세로 분할",
-    "closePanel": "패널 닫기"
+    "closePanel": "패널 닫기",
+    "computer": "컴퓨터"
   },
   "archivedConversations": {
     "searchPlaceholder": "보관된 대화 검색...",
@@ -1301,7 +1302,8 @@
       "rolePlaceholder": "예: 개인 비서",
       "introPlaceholder": "에이전트가 사용할 간략한 소개...",
       "responseStylePlaceholder": "예: 친근한, 공식적인, 간결한"
-    }
+    },
+    "computer": "컴퓨터"
   },
   "apps": {
     "searchPlaceholder": "검색...",
@@ -2255,5 +2257,19 @@
       "dismiss": "확인",
       "progress": "{{current}} / {{total}}"
     }
+  },
+  "computer": {
+    "titleFor": "{{name}}의 컴퓨터",
+    "subtitle": "실시간 보기",
+    "youAreInControl": "내가 제어 중",
+    "agentDriving": "에이전트가 사용 중",
+    "reconnect": "다시 연결",
+    "openInNewTab": "새 탭에서 열기",
+    "starting": "컴퓨터를 시작하는 중…",
+    "openFailed": "컴퓨터를 열 수 없습니다",
+    "retry": "다시 시도",
+    "iframeTitle": "{{name}} 실시간 보기",
+    "webOnly": "실시간 보기는 웹에서만 사용할 수 있습니다",
+    "openLiveView": "컴퓨터 열기"
   }
 }

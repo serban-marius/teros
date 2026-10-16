@@ -15,6 +15,7 @@ import type {
   ContainerStartOptions,
   IContainerBackend,
 } from './container-backend';
+import { mcaContainerPrefix } from './container-backend';
 import { TEROS_EGRESS_NETWORK, TEROS_EGRESS_SUBNET } from './mca-network-policy';
 
 export interface DockerContainerBackendConfig {
@@ -123,6 +124,9 @@ function isPortFree(port: number): Promise<boolean> {
     server.listen(port, '127.0.0.1');
   });
 }
+
+/** Seconds an MCA gets to exit on SIGTERM before Docker kills it. */
+const STOP_GRACE_SECONDS = 5;
 
 export class DockerContainerBackend implements IContainerBackend {
   private usedPorts = new Set<number>();
@@ -309,6 +313,10 @@ export class DockerContainerBackend implements IContainerBackend {
   async stop(containerName: string): Promise<void> {
     // Validate before using in command
     assertSafeContainerName(containerName);
+    // SIGTERM first so MCAs with on-disk state can flush it (e.g. the computer
+    // MCA closes Chromium, which writes its cookie DB); then remove.
+    await execDocker(['stop', '--time', String(STOP_GRACE_SECONDS), containerName], { timeoutMs: 30_000 })
+      .catch(() => { /* intentional: container may already be stopped/removed — rm below handles it */ });
     await execDocker(['rm', '-f', containerName], { timeoutMs: 30_000 })
       .catch(() => { /* intentional: container may already be stopped/removed — cleanup only */ });
   }
@@ -330,13 +338,28 @@ export class DockerContainerBackend implements IContainerBackend {
   async cleanupOrphans(): Promise<void> {
     try {
       const result = await execDocker(
-        ['ps', '-a', '--filter', 'name=^mca-', '--format', '{{.Names}}'],
+        ['ps', '-a', '--filter', `name=^${mcaContainerPrefix()}mca-`, '--format', '{{.Names}}'],
         { timeoutMs: 30_000 },
       );
       if (result.status !== 0) return;
       const output = result.stdout.trim();
       if (!output) return;
-      for (const name of output.split('\n').filter(Boolean)) {
+      const names = output.split('\n').filter(Boolean);
+      // One `docker stop` for all: the daemon stops them in parallel, so the
+      // grace period is paid once, not per container.
+      const safe = names.filter((n) => {
+        try {
+          assertSafeContainerName(n);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      if (safe.length) {
+        await execDocker(['stop', '--time', String(STOP_GRACE_SECONDS), ...safe], { timeoutMs: 60_000 })
+          .catch(() => { /* intentional: best-effort — rm -f below still removes them */ });
+      }
+      for (const name of names) {
         // Validate each name returned by Docker before using it — defense in depth
         try {
           assertSafeContainerName(name);

@@ -38,9 +38,11 @@
  */
 
 import {
+  type HttpRouteHandler,
   type ToolConfig as HttpToolConfig,
   type ToolContext as HttpToolContext,
   McaHttpServer,
+  type WsRouteHandler,
 } from './http-server';
 import {
   McaStdioServer,
@@ -229,6 +231,8 @@ export class McaServer {
   private stdioServer: McaStdioServer | null = null;
   private activeTransport: 'http' | 'stdio' = 'http';
   private healthCheckFn: (() => Promise<HealthCheckResult> | HealthCheckResult) | null = null;
+  private httpRoutes: Array<{ prefix: string; handler: HttpRouteHandler }> = [];
+  private wsRoutes: Array<{ prefix: string; handler: WsRouteHandler }> = [];
 
   constructor(config: McaServerConfig) {
     this.config = config;
@@ -259,6 +263,19 @@ export class McaServer {
    */
   setHealthCheck(fn: () => Promise<HealthCheckResult> | HealthCheckResult): void {
     this.healthCheckFn = fn;
+  }
+
+  /**
+   * Serve extra HTTP endpoints under `prefix` (HTTP transport only). Only the
+   * backend can call them: they require its bearer token (MCA_CALLBACK_TOKEN).
+   */
+  httpRoute(prefix: string, handler: HttpRouteHandler): void {
+    this.httpRoutes.push({ prefix, handler });
+  }
+
+  /** Accept WebSocket upgrades under `prefix` (HTTP transport only, same auth). */
+  wsRoute(prefix: string, handler: WsRouteHandler): void {
+    this.wsRoutes.push({ prefix, handler });
   }
 
   // ==========================================================================
@@ -338,6 +355,9 @@ export class McaServer {
     if (this.healthCheckFn) {
       this.httpServer.setHealthCheck(this.healthCheckFn);
     }
+
+    for (const { prefix, handler } of this.httpRoutes) this.httpServer.httpRoute(prefix, handler);
+    for (const { prefix, handler } of this.wsRoutes) this.httpServer.wsRoute(prefix, handler);
 
     await this.httpServer.start();
   }

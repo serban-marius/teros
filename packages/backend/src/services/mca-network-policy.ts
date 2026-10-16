@@ -38,6 +38,8 @@ export const MCAS_WITH_EGRESS: readonly string[] = [
   'mca.netlify',
   'mca.make',
   'mca.teros.bash',
+  // An agent's own desktop browser: browses arbitrary sites, never internal services.
+  'mca.teros.computer',
 ];
 
 export const TEROS_INTERNAL_NETWORK = 'teros_teros-network';

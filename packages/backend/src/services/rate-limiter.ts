@@ -106,6 +106,7 @@ const EXCLUDED_PREFIXES = [
   "/api/event", // MCA internal token
   "/api/mca-event", // MCA internal token
   "/api/feedback", // feedback internal token
+  "/computer/", // signed view ticket; a live view loads dozens of module files
 ]
 
 /** Exact paths never rate-limited. */

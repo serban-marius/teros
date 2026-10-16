@@ -56,7 +56,9 @@ echo "🌐 Port: $MCA_HTTP_PORT"
 # is never copied — that's the whole point of baking it into the image.
 # Nothing under /app/mca is ever written.
 # ─────────────────────────────────────────────────────────────────
-RUN_DIR="/run/mca"
+# MCA_RUN_DIR lets images that run the MCA as a non-root user (e.g.
+# mca-runtime-computer) point it at a directory that user can recreate.
+RUN_DIR="${MCA_RUN_DIR:-/run/mca}"
 rm -rf "$RUN_DIR"
 mkdir -p "$RUN_DIR"
 

@@ -9,11 +9,17 @@
  * Container naming:
  *   - shared mode:  mca-<mcaId-dashes>          e.g. mca-teros-bash
  *   - per-app mode: mca-<mcaId-dashes>-<hash>   e.g. mca-teros-bash-a1b2c3
+ * Both get MCA_CONTAINER_PREFIX prepended when set (e.g. dev-mca-teros-bash).
  */
 
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { captureException } from '../lib/sentry';
-import type { ContainerInfo, ContainerStartOptions, IContainerBackend } from './container-backend';
+import {
+  type ContainerInfo,
+  type ContainerStartOptions,
+  type IContainerBackend,
+  mcaContainerPrefix,
+} from './container-backend';
 
 export type { ContainerInfo, ContainerStartOptions };
 export type { VolumeMount } from './container-backend';
@@ -53,7 +59,7 @@ export class McaContainerManager {
   // ── Name helpers ───────────────────────────────────────────────────────────
 
   private mcaIdToBaseName(mcaId: string): string {
-    return mcaId.replace(/\./g, '-');
+    return `${mcaContainerPrefix()}${mcaId.replace(/\./g, '-')}`;
   }
 
   private getContainerKey(mcaId: string, options?: ContainerStartOptions): string {
@@ -174,6 +180,14 @@ export class McaContainerManager {
       if (this.verifyCallbackToken(key, token)) return true;
     }
     return false;
+  }
+
+  /**
+   * The bearer token a container accepts on its SDK extension routes (it is
+   * the container's MCA_CALLBACK_TOKEN). For backend-side proxies only.
+   */
+  getCallbackToken(containerKey: string): string | undefined {
+    return this.callbackTokens.get(containerKey);
   }
 
   getInfo(containerKey: string): ContainerInfo | undefined {

@@ -880,7 +880,8 @@
     "splitBottom": "Split bottom",
     "splitHorizontal": "Split horizontal",
     "splitVertical": "Split vertical",
-    "closePanel": "Close panel"
+    "closePanel": "Close panel",
+    "computer": "Computer"
   },
   "archivedConversations": {
     "searchPlaceholder": "Search archived...",
@@ -1301,7 +1302,8 @@
       "rolePlaceholder": "e.g., Personal Assistant",
       "introPlaceholder": "A brief introduction that the agent will use...",
       "responseStylePlaceholder": "e.g., friendly, formal, concise"
-    }
+    },
+    "computer": "Computer"
   },
   "apps": {
     "searchPlaceholder": "Search...",
@@ -2255,5 +2257,19 @@
       "dismiss": "Got it",
       "progress": "{{current}} of {{total}}"
     }
+  },
+  "computer": {
+    "titleFor": "{{name}}'s computer",
+    "subtitle": "Live view",
+    "youAreInControl": "You're in control",
+    "agentDriving": "Agent is driving",
+    "reconnect": "Reconnect",
+    "openInNewTab": "Open in new tab",
+    "starting": "Starting the computer…",
+    "openFailed": "Couldn't open the computer",
+    "retry": "Retry",
+    "iframeTitle": "Live view of {{name}}",
+    "webOnly": "The live view is only available on web",
+    "openLiveView": "Open computer"
   }
 }

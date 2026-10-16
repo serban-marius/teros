@@ -22,6 +22,20 @@ export function envLimit(name: string, fallback: number): number | undefined {
 }
 
 /**
+ * Parse MCA_PORT_RANGE ("min-max"). Unset/invalid → the 13000-13999 default.
+ * Lets two stacks on one host use disjoint ranges.
+ */
+export function parsePortRange(raw: string | undefined): { min: number; max: number } {
+  const fallback = { min: 13000, max: 13999 };
+  const m = raw?.trim().match(/^(\d+)-(\d+)$/);
+  if (!m) return fallback;
+  const min = Number(m[1]);
+  const max = Number(m[2]);
+  if (min < 1024 || max > 65535 || max <= min) return fallback;
+  return { min, max };
+}
+
+/**
  * Host gateway IP for host.docker.internal resolution inside MCA containers.
  * MCA_HOST_GATEWAY overrides (empty string = none); macOS resolves natively.
  */
@@ -48,7 +62,7 @@ export function createDockerContainerBackend(
     dockerImage: 'teros/mca-runtime',
     hostGateway: resolveHostGateway(),
     backendPort: opts.backendPort,
-    portRange: { min: 13000, max: 13999 },
+    portRange: parsePortRange(process.env.MCA_PORT_RANGE),
     // Default 1 CPU / 1 GiB per container so no single MCA can take down the
     // host. Override per-MCA via manifest runtime.resources, or globally via
     // env (0 = unlimited).

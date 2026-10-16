@@ -434,7 +434,18 @@ export interface McpCatalogEntry {
      * - 'super': Only super admins can use
      */
     role: 'user' | 'admin' | 'super';
+    /**
+     * One instance per agent: provisioning creates a dedicated app for each
+     * agent (App.forAgentId) instead of one per owner.
+     */
+    perAgent?: boolean;
   };
+
+  /**
+   * Agent usage guidance from the MCA's `agentInstructions` markdown file,
+   * injected into the system prompt of every agent that has an instance.
+   */
+  agentInstructions?: string;
 
   /**
    * System-level secrets required (e.g., ['CLIENT_ID', 'CLIENT_SECRET'])
@@ -609,6 +620,11 @@ export interface McpCatalogEntry {
      * /workspace. Grants the MCA full access to the user's workspace files.
      */
     workspaceMount?: boolean;
+    /**
+     * Private persistent volume per app instance (named Docker volume
+     * `teros-app-<appId>`) mounted at containerPath.
+     */
+    appVolume?: { containerPath: string };
     /**
      * Container resource limits (Docker --cpus / --memory). When omitted, the
      * backend-wide defaults apply (MCA_CONTAINER_CPUS / MCA_CONTAINER_MEMORY_MB).
@@ -793,6 +809,14 @@ export interface App {
    * Context-budget mechanism only — the permission gate is identical on both paths.
    */
   toolExposure?: 'direct' | 'proxy';
+
+  /**
+   * For per-agent MCAs (availability.perAgent, e.g. mca.teros.computer): the
+   * agent this instance belongs to. Lookup key for "this agent's computer";
+   * an access grant alone can't tell it apart from an instance shared with
+   * the agent.
+   */
+  forAgentId?: string;
 
   /**
    * Volume mounts for this app

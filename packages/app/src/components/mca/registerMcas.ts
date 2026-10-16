@@ -40,6 +40,7 @@ import { PerplexityToolCallRenderer } from './renderers/PerplexityRenderer';
 import { ReplicateToolCallRenderer } from './renderers/ReplicateRenderer';
 import { ConversationsToolCallRenderer } from './renderers/ConversationsRenderer';
 import { Context7ToolCallRenderer } from './renderers/Context7Renderer';
+import { ComputerToolCallRenderer } from './renderers/ComputerRenderer';
 import { GuideToolCallRenderer } from './renderers/GuideRenderer';
 import { RailwayToolCallRenderer } from './renderers/RailwayRenderer';
 import { RenderToolCallRenderer } from './renderers/RenderRenderer';
@@ -296,6 +297,13 @@ export function registerAllMcas(): void {
     name: 'Teros Guide',
     toolNames: [],
     ToolCallRenderer: GuideToolCallRenderer,
+  });
+
+  McaRegistry.register({
+    mcaId: 'mca.teros.computer',
+    name: 'Computer',
+    toolNames: [],
+    ToolCallRenderer: ComputerToolCallRenderer,
   });
 
   // Register Teros Core MCA (platform management: agents, workspaces, apps,
