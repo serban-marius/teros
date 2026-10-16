@@ -106,7 +106,8 @@ require("http").createServer((q, s) => {
   if (q.url.startsWith("/login")) { s.setHeader("Set-Cookie", "smoke=yes; Max-Age=86400; Path=/"); return s.end("<h1>Logged in</h1>"); }
   if (q.url.startsWith("/whoami")) return s.end("<p id=c>cookie:" + (q.headers.cookie || "none") + "</p>");
   s.end("<label>Name <input id=n></label><button onclick=\\"document.title=document.getElementById(\\x27n\\x27).value\\">Save</button>");
-}).listen(8099, "127.0.0.1");' > /tmp/site.log 2>&1 &`
+}).listen(8099, "127.0.0.1");' > /tmp/site.log 2>&1 &
+for i in $(seq 1 100); do (echo > /dev/tcp/127.0.0.1/8099) 2>/dev/null && break; sleep 0.1; done`
 
 const describeIf = available ? describe : describe.skip
 
