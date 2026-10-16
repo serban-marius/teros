@@ -59,6 +59,14 @@ export const PROVIDER_TYPES_WITHOUT_SECRETS: readonly ProviderType[] = [
   'teros',
 ] as const;
 
+/**
+ * Credential-free provider types whose API key is OPTIONAL: stored when the
+ * user gives one (e.g. a hosted OpenAI-compatible endpoint such as NaN
+ * Builders or vLLM behind auth) and used when present; endpoints without auth
+ * keep working with none.
+ */
+export const PROVIDER_TYPES_WITH_OPTIONAL_SECRETS: readonly ProviderType[] = ['openai-compatible'] as const;
+
 export interface ProviderCapabilities {
   streaming: boolean;
   tools: boolean;
@@ -339,6 +347,19 @@ export class ProviderService {
   /**
    * Get decrypted secrets for a provider
    */
+  /**
+   * Secrets to build a client with: required ones (null when missing), none
+   * for credential-free types, or whatever was stored for optional-key types.
+   */
+  async resolveProviderSecrets(provider: Pick<UserProviderRecord, 'userId' | 'providerId' | 'providerType'>): Promise<ProviderSecrets | null> {
+    const type = provider.providerType as ProviderType;
+    if (PROVIDER_TYPES_WITH_OPTIONAL_SECRETS.includes(type)) {
+      return (await this.getProviderSecrets(provider.userId, provider.providerId)) ?? {};
+    }
+    if (PROVIDER_TYPES_WITHOUT_SECRETS.includes(type)) return {};
+    return this.getProviderSecrets(provider.userId, provider.providerId);
+  }
+
   async getProviderSecrets(userId: string, providerId: string): Promise<ProviderSecrets | null> {
     const provider = await this.getProvider(providerId);
     if (!provider || provider.userId !== userId) return null;
@@ -374,7 +395,7 @@ export class ProviderService {
     const isCredentialFree = PROVIDER_TYPES_WITHOUT_SECRETS.includes(provider.providerType as ProviderType);
 
     // Get decrypted secrets (not required for credential-free providers)
-    const secretsData = isCredentialFree ? {} : await this.getProviderSecrets(provider.userId, providerId);
+    const secretsData = await this.resolveProviderSecrets(provider);
     if (!secretsData && !isCredentialFree) {
       return { ok: false, error: 'No secrets configured for this provider' };
     }
@@ -937,9 +958,7 @@ export class ProviderService {
       for (const provider of providers) {
         const model = provider.models.find((m) => m.modelId === selectedModelId);
         if (model) {
-          const secretsData = PROVIDER_TYPES_WITHOUT_SECRETS.includes(provider.providerType as ProviderType)
-            ? {}
-            : await this.getProviderSecrets(provider.userId, provider.providerId);
+          const secretsData = await this.resolveProviderSecrets(provider);
           if (secretsData !== null) return { provider, model, secrets: secretsData ?? {} };
         }
       }
@@ -964,9 +983,7 @@ export class ProviderService {
         model = provider.models[0];
       }
 
-      const secretsData = PROVIDER_TYPES_WITHOUT_SECRETS.includes(provider.providerType as ProviderType)
-        ? {}
-        : await this.getProviderSecrets(provider.userId, provider.providerId);
+      const secretsData = await this.resolveProviderSecrets(provider);
       if (secretsData !== null) return { provider, model, secrets: secretsData ?? {} };
     }
 
