@@ -54,3 +54,6 @@ export const EyeOff = NoopIcon
 export const Eye = NoopIcon
 export const Save = NoopIcon
 export const Unlock = NoopIcon
+
+// Computer window (agent desktop live view).
+export const Monitor = NoopIcon

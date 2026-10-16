@@ -430,20 +430,21 @@ export class OpenAICompatibleLLMAdapter implements ILLMClient {
   ): Promise<Map<string, ProcessedImage[]>> {
     const byCall = new Map<string, ProcessedImage[]>()
     if (!this.imagePipeline.supportsVision(this.defaultModel)) return byCall
-    const picked: Array<{ callID: string; file: import("../session/types").FilePart }> = []
-    for (let i = messages.length - 1; i >= 0 && picked.length < MAX_TOOL_RESULT_IMAGES; i--) {
-      const parts = messages[i].parts
-      for (let j = parts.length - 1; j >= 0 && picked.length < MAX_TOOL_RESULT_IMAGES; j--) {
-        const part = parts[j]
-        if (part.type !== "tool" || part.state.status !== "completed") continue
-        const files = (part.state as { attachments?: import("../session/types").FilePart[] }).attachments ?? []
-        for (const f of files) {
-          if (f.type === "file" && f.mime?.startsWith("image/") && picked.length < MAX_TOOL_RESULT_IMAGES) {
-            picked.push({ callID: part.callID, file: f })
-          }
-        }
-      }
-    }
+    type FilePart = import("../session/types").FilePart
+    // Newest first: walk the completed tool parts backwards.
+    const toolParts = messages
+      .flatMap((m) => m.parts)
+      .filter((p) => p.type === "tool" && p.state.status === "completed")
+      .reverse()
+    const picked = toolParts
+      .flatMap((part) => {
+        const files = (part as { state: { attachments?: FilePart[] } }).state.attachments ?? []
+        const callID = (part as { callID: string }).callID
+        return files
+          .filter((f) => f.type === "file" && f.mime?.startsWith("image/"))
+          .map((file) => ({ callID, file }))
+      })
+      .slice(0, MAX_TOOL_RESULT_IMAGES)
     if (picked.length === 0) return byCall
     try {
       const processed = await this.imagePipeline.processImages(
@@ -454,9 +455,9 @@ export class OpenAICompatibleLLMAdapter implements ILLMClient {
         const img = processed.get(file.url)
         if (img) byCall.set(callID, [...(byCall.get(callID) ?? []), img])
       }
-    } catch (error: any) {
+    } catch (error) {
       log.error("OpenAICompatibleLLM", "Failed to process tool result images", undefined, {
-        reason: error.message,
+        reason: (error as Error).message,
       })
     }
     return byCall

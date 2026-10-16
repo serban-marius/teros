@@ -80,7 +80,7 @@ function emitOnly(outPath, mcaIds) {
   const sorted = Object.fromEntries(Object.keys(deps).sort().map((k) => [k, deps[k]]));
   writeFileSync(
     join(ROOT, outPath),
-    JSON.stringify({ name: 'mca-deps', private: true, dependencies: sorted }, null, 2) + '\n',
+    `${JSON.stringify({ name: 'mca-deps', private: true, dependencies: sorted }, null, 2)}\n`,
   );
   console.log(`[gen-mca-union-deps] ${Object.keys(sorted).length} deps -> ${outPath}`);
 }

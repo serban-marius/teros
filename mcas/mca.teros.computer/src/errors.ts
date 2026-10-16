@@ -5,25 +5,25 @@
  * for each one.
  */
 export type ComputerErrorCode =
-  | 'human_has_control'
-  | 'element_not_found'
-  | 'browser_not_running'
-  | 'invalid_argument'
-  | 'action_timeout'
-  | 'navigation_failed'
-  | 'screenshot_failed'
-  | 'command_failed';
+  | "human_has_control"
+  | "element_not_found"
+  | "browser_not_running"
+  | "invalid_argument"
+  | "action_timeout"
+  | "navigation_failed"
+  | "screenshot_failed"
+  | "command_failed"
 
 export class ComputerError extends Error {
   constructor(
     readonly code: ComputerErrorCode,
     detail: string,
   ) {
-    super(`${code}: ${detail}`);
-    this.name = 'ComputerError';
+    super(`${code}: ${detail}`)
+    this.name = "ComputerError"
   }
 }
 
 export function invalidArgument(detail: string): ComputerError {
-  return new ComputerError('invalid_argument', detail);
+  return new ComputerError("invalid_argument", detail)
 }

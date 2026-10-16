@@ -73,11 +73,7 @@
           },
           "button": {
             "type": "string",
-            "enum": [
-              "left",
-              "middle",
-              "right"
-            ],
+            "enum": ["left", "middle", "right"],
             "description": "Mouse button (default left)."
           },
           "double": {
@@ -90,12 +86,7 @@
           },
           "observe": {
             "type": "string",
-            "enum": [
-              "snapshot",
-              "summary",
-              "screenshot",
-              "none"
-            ],
+            "enum": ["snapshot", "summary", "screenshot", "none"],
             "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
           }
         }
@@ -125,18 +116,11 @@
           },
           "observe": {
             "type": "string",
-            "enum": [
-              "snapshot",
-              "summary",
-              "screenshot",
-              "none"
-            ],
+            "enum": ["snapshot", "summary", "screenshot", "none"],
             "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
           }
         },
-        "required": [
-          "text"
-        ]
+        "required": ["text"]
       }
     },
     {
@@ -151,18 +135,11 @@
           },
           "observe": {
             "type": "string",
-            "enum": [
-              "snapshot",
-              "summary",
-              "screenshot",
-              "none"
-            ],
+            "enum": ["snapshot", "summary", "screenshot", "none"],
             "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
           }
         },
-        "required": [
-          "keys"
-        ]
+        "required": ["keys"]
       }
     },
     {
@@ -173,12 +150,7 @@
         "properties": {
           "direction": {
             "type": "string",
-            "enum": [
-              "up",
-              "down",
-              "left",
-              "right"
-            ],
+            "enum": ["up", "down", "left", "right"],
             "description": "Scroll direction."
           },
           "amount": {
@@ -199,18 +171,11 @@
           },
           "observe": {
             "type": "string",
-            "enum": [
-              "snapshot",
-              "summary",
-              "screenshot",
-              "none"
-            ],
+            "enum": ["snapshot", "summary", "screenshot", "none"],
             "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
           }
         },
-        "required": [
-          "direction"
-        ]
+        "required": ["direction"]
       }
     },
     {
@@ -237,21 +202,11 @@
           },
           "observe": {
             "type": "string",
-            "enum": [
-              "snapshot",
-              "summary",
-              "screenshot",
-              "none"
-            ],
+            "enum": ["snapshot", "summary", "screenshot", "none"],
             "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
           }
         },
-        "required": [
-          "fromX",
-          "fromY",
-          "toX",
-          "toY"
-        ]
+        "required": ["fromX", "fromY", "toX", "toY"]
       }
     },
     {
@@ -270,18 +225,11 @@
           },
           "observe": {
             "type": "string",
-            "enum": [
-              "snapshot",
-              "summary",
-              "screenshot",
-              "none"
-            ],
+            "enum": ["snapshot", "summary", "screenshot", "none"],
             "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
           }
         },
-        "required": [
-          "url"
-        ]
+        "required": ["url"]
       }
     },
     {
@@ -292,12 +240,7 @@
         "properties": {
           "action": {
             "type": "string",
-            "enum": [
-              "list",
-              "switch",
-              "close",
-              "new"
-            ],
+            "enum": ["list", "switch", "close", "new"],
             "description": "What to do (default list)."
           },
           "index": {
@@ -331,12 +274,7 @@
           },
           "observe": {
             "type": "string",
-            "enum": [
-              "snapshot",
-              "summary",
-              "screenshot",
-              "none"
-            ],
+            "enum": ["snapshot", "summary", "screenshot", "none"],
             "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
           }
         }
@@ -360,9 +298,7 @@
             "description": "Timeout, default 30000, max 300000."
           }
         },
-        "required": [
-          "command"
-        ]
+        "required": ["command"]
       }
     },
     {

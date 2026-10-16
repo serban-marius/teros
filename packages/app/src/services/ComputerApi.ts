@@ -6,7 +6,7 @@
  * short-lived signed live-view URL to embed in an iframe.
  */
 
-import type { Transport } from './transport/types'
+import type { Transport } from "./transport/types"
 
 export interface OpenComputerResult {
   appId: string
@@ -22,7 +22,11 @@ export class ComputerApi {
   constructor(private readonly transport: Transport) {}
 
   /** Open an agent's computer (created on first use), or a specific computer app. */
-  open(target: { agentId?: string; appId?: string; workspaceId?: string }): Promise<OpenComputerResult> {
-    return this.transport.request<OpenComputerResult>('computer.open', target)
+  open(target: {
+    agentId?: string
+    appId?: string
+    workspaceId?: string
+  }): Promise<OpenComputerResult> {
+    return this.transport.request<OpenComputerResult>("computer.open", target)
   }
 }

@@ -12,7 +12,8 @@ set -e
 # Mirrors the build steps of scripts/deploy-execution-host.sh (prod), minus
 # the SSH/pm2/firewall orchestration that only applies to the execution host.
 #
-# Images built: mca-runtime (default), mca-runtime-playwright, mca-runtime-bash.
+# Images built: mca-runtime (default), mca-runtime-playwright, mca-runtime-bash,
+# mca-runtime-computer.
 # mca-runtime-whatsapp is built only if WAHA_DOCKER_USERNAME/PASSWORD are set
 # (paid upstream base image) — otherwise it is skipped with a warning.
 # mca-runtime-docker-env is NOT built here; it is not wired into any deploy
@@ -36,6 +37,9 @@ docker build -t teros/mca-runtime-playwright:latest -f docker/mca-runtime-playwr
 
 echo "==> Building mca-runtime-bash image..."
 docker build -t teros/mca-runtime-bash:latest -f docker/mca-runtime-bash/Dockerfile .
+
+echo "==> Building mca-runtime-computer image (agent desktops)..."
+docker build -t teros/mca-runtime-computer:latest -f docker/mca-runtime-computer/Dockerfile .
 
 if [ -n "$WAHA_DOCKER_USERNAME" ] && [ -n "$WAHA_DOCKER_PASSWORD" ]; then
   echo "==> Building mca-runtime-whatsapp image..."

@@ -6,40 +6,40 @@
  * session stays there for the agent.
  */
 
-import { Monitor } from '@tamagui/lucide-icons';
-import i18n from '../../i18n';
-import type { WindowTypeDefinition } from '../../services/windowRegistry';
-import { ComputerWindowContent } from './ComputerWindowContent';
+import { Monitor } from "@tamagui/lucide-icons"
+import i18n from "../../i18n"
+import type { WindowTypeDefinition } from "../../services/windowRegistry"
+import { ComputerWindowContent } from "./ComputerWindowContent"
 
 export interface ComputerWindowProps {
   /** Agent whose computer to show (created on first open). */
-  agentId?: string;
+  agentId?: string
   /** Or a specific computer app (e.g. from a tool-call card). */
-  appId?: string;
+  appId?: string
   /** Active workspace (needed for superagents). */
-  workspaceId?: string;
+  workspaceId?: string
   /** Agent name for the title, when known. */
-  agentName?: string;
+  agentName?: string
 }
 
 export const computerWindowDefinition: WindowTypeDefinition<ComputerWindowProps> = {
-  type: 'computer',
-  displayName: 'Computer',
+  type: "computer",
+  displayName: "Computer",
   icon: Monitor,
-  color: '#6366f1',
+  color: "#6366f1",
 
   component: ComputerWindowContent,
 
   defaultSize: { width: 1280, height: 860 },
   minSize: { width: 640, height: 420 },
 
-  getKey: (props) => props.appId ?? props.agentId ?? 'computer',
+  getKey: (props) => props.appId ?? props.agentId ?? "computer",
 
   getTitle: (props) =>
     props.agentName
-      ? i18n.t('computer.titleFor', { name: props.agentName })
-      : i18n.t('windows.computer'),
-  getSubtitle: () => i18n.t('computer.subtitle'),
+      ? i18n.t("computer.titleFor", { name: props.agentName })
+      : i18n.t("windows.computer"),
+  getSubtitle: () => i18n.t("computer.subtitle"),
 
   // The view URL is a short-lived ticket: never persist it, re-open on restore.
   serialize: (props) => ({
@@ -55,4 +55,4 @@ export const computerWindowDefinition: WindowTypeDefinition<ComputerWindowProps>
     workspaceId: data.workspaceId as string | undefined,
     agentName: data.agentName as string | undefined,
   }),
-};
+}

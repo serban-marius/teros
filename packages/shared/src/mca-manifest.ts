@@ -351,7 +351,7 @@ export const MCARuntimeSchema = z.object({
    */
   appVolume: z
     .object({
-      containerPath: z.string().regex(/^\/[a-zA-Z0-9_.\/-]+$/, 'containerPath must be an absolute path'),
+      containerPath: z.string().regex(/^\/[a-zA-Z0-9_./-]+$/, 'containerPath must be an absolute path'),
     })
     .optional(),
   /**
@@ -522,6 +522,32 @@ export const MCAManifestSchema = z.object({
 // REFINED MANIFEST WITH CROSS-FIELD VALIDATION
 // ============================================================================
 
+/**
+ * Rule 4 of MCAManifestRefinedSchema: per-agent instances
+ * (availability.perAgent) and private app volumes (runtime.appVolume) only
+ * make sense with one container per app instance.
+ */
+function checkPerAppRuntimeRules(manifest: z.infer<typeof MCAManifestSchema>, ctx: z.RefinementCtx): void {
+  if (!manifest.runtime) return;
+  if (manifest.availability.perAgent && !manifest.availability.multi) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'availability.perAgent requires availability.multi: true (one instance per agent)',
+      path: ['availability', 'perAgent'],
+    });
+  }
+  if (
+    (manifest.availability.perAgent || manifest.runtime.appVolume) &&
+    manifest.runtime.containerMode !== 'per-app'
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'availability.perAgent and runtime.appVolume require containerMode: "per-app"',
+      path: ['runtime', 'containerMode'],
+    });
+  }
+}
+
 export const MCAManifestRefinedSchema = MCAManifestSchema.superRefine((manifest, ctx) => {
   // Rule 1: HTTP transport MCAs must have runtime config
   if (!manifest.runtime) {
@@ -560,23 +586,7 @@ export const MCAManifestRefinedSchema = MCAManifestSchema.superRefine((manifest,
   }
 
   // Rule 4: per-agent instances and private app volumes need one container per app
-  if (manifest.availability.perAgent && !manifest.availability.multi) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'availability.perAgent requires availability.multi: true (one instance per agent)',
-      path: ['availability', 'perAgent'],
-    });
-  }
-  if (
-    (manifest.availability.perAgent || manifest.runtime.appVolume) &&
-    manifest.runtime.containerMode !== 'per-app'
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'availability.perAgent and runtime.appVolume require containerMode: "per-app"',
-      path: ['runtime', 'containerMode'],
-    });
-  }
+  checkPerAppRuntimeRules(manifest, ctx);
 
   // Rule 5: System MCAs should be hidden or have explicit reason
   if (

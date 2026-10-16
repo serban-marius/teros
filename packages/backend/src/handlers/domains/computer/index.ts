@@ -6,22 +6,22 @@
  *                   warm it up, and return a signed live-view URL
  */
 
-import type { Db } from 'mongodb';
-import type { ComputerViewService } from '../../../services/computer-view-service';
-import type { McaService } from '../../../services/mca-service';
-import type { WsRouter } from '../../../ws-framework/WsRouter';
-import { createOpenComputerHandler } from './open';
+import type { Db } from "mongodb"
+import type { ComputerViewService } from "../../../services/computer-view-service"
+import type { McaService } from "../../../services/mca-service"
+import type { WsRouter } from "../../../ws-framework/WsRouter"
+import { createOpenComputerHandler } from "./open"
 
 export interface ComputerDomainDeps {
-  db: Db;
-  mcaService: McaService;
-  computerViewService: ComputerViewService;
+  db: Db
+  mcaService: McaService
+  computerViewService: ComputerViewService
   /** Starts the container ahead of the iframe load (best effort). */
-  warmUp: (appId: string) => Promise<unknown>;
+  warmUp: (appId: string) => Promise<unknown>
   /** Public base URL of this backend (e.g. https://api.teros.ai). */
-  publicBaseUrl: string;
+  publicBaseUrl: string
 }
 
 export function register(router: WsRouter, deps: ComputerDomainDeps): void {
-  router.register('computer.open', createOpenComputerHandler(deps));
+  router.register("computer.open", createOpenComputerHandler(deps))
 }

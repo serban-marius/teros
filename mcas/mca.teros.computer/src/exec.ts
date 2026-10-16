@@ -1,14 +1,14 @@
-import { execFile } from 'node:child_process';
+import { execFile } from "node:child_process"
 
 export interface ExecResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-  timedOut: boolean;
+  stdout: string
+  stderr: string
+  exitCode: number
+  timedOut: boolean
 }
 
 /** The X display every desktop process uses (set by the image entrypoint). */
-export const DISPLAY = process.env.DISPLAY || ':1';
+export const DISPLAY = process.env.DISPLAY || ":1"
 
 /**
  * Run a program without a shell (arguments are never interpreted), with the
@@ -28,17 +28,19 @@ export function run(
         cwd: opts.cwd,
         maxBuffer: opts.maxBuffer ?? 8 * 1024 * 1024,
         env: { ...process.env, DISPLAY },
-        encoding: 'utf8',
+        encoding: "utf8",
       },
       (error, stdout, stderr) => {
-        const err = error as (NodeJS.ErrnoException & { killed?: boolean; code?: number | string }) | null;
+        const err = error as
+          | (NodeJS.ErrnoException & { killed?: boolean; code?: number | string })
+          | null
         resolve({
-          stdout: stdout ?? '',
-          stderr: stderr ?? '',
-          exitCode: err ? (typeof err.code === 'number' ? err.code : 1) : 0,
+          stdout: stdout ?? "",
+          stderr: stderr ?? "",
+          exitCode: err ? (typeof err.code === "number" ? err.code : 1) : 0,
           timedOut: Boolean(err?.killed),
-        });
+        })
       },
-    );
-  });
+    )
+  })
 }

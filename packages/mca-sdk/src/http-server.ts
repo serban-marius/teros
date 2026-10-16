@@ -25,10 +25,10 @@ import type {
   McaToolsListResponse,
 } from '@teros/shared';
 import { generateMessageId, MCA_PROTOCOL_VERSION, McaErrorCode } from '@teros/shared';
-import { timingSafeEqual } from 'crypto';
+import { timingSafeEqual } from 'node:crypto';
 import type { Server as HttpServer } from 'http';
 import { createServer, type IncomingMessage, type ServerResponse } from 'http';
-import type { Duplex } from 'stream';
+import type { Duplex } from 'node:stream';
 import { McaBackendClient } from './backend-client';
 
 // ============================================================================
