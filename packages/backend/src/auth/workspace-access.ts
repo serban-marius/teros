@@ -51,9 +51,25 @@ export async function canAccessAgent(db: Db, userId: string, agentId: string): P
   return false
 }
 
+/**
+ * An agent's own app instance (`App.forAgentId`, e.g. its computer) follows
+ * that agent, not just the app's workspace: a superagent's computer holds its
+ * owner's logins and opens for that owner only. Other apps pass.
+ */
+export async function canAccessAgentApp(
+  db: Db,
+  userId: string,
+  app: { forAgentId?: string | null },
+): Promise<boolean> {
+  return !app.forAgentId || canAccessAgent(db, userId, app.forAgentId)
+}
+
 export async function canAccessApp(db: Db, userId: string, appId: string): Promise<boolean> {
   const app = await db.collection('apps').findOne({ appId })
   if (!app) return false
+  if (!(await canAccessAgentApp(db, userId, { forAgentId: app.forAgentId as string | undefined }))) {
+    return false
+  }
 
   // Legacy user-owned app (deprecated — all apps are now workspace-owned)
   if (app.ownerType === 'user' && app.ownerId === userId) return true

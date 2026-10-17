@@ -1,5 +1,5 @@
 import type { WsHandlerContext } from "@teros/shared"
-import { canAccessWorkspace } from "../../../auth/workspace-access"
+import { canAccessAgentApp, canAccessWorkspace } from "../../../auth/workspace-access"
 import { COMPUTER_MCA_ID } from "../../../services/computer-view-service"
 import type { App } from "../../../types/database"
 import { HandlerError } from "../../../ws-framework/WsRouter"
@@ -34,6 +34,19 @@ async function findComputerApp(
   return app?.mcaId === COMPUTER_MCA_ID ? app : null
 }
 
+/** Opening a computer found by app follows the same rules as opening it by agent. */
+async function assertCanOpenApp(db: ComputerDomainDeps["db"], userId: string, app: App) {
+  if (!(await canAccessWorkspace(db, userId, app.ownerId))) {
+    throw new HandlerError("FORBIDDEN_WORKSPACE", `No access to workspace ${app.ownerId}`)
+  }
+  // A superagent's computer (its browser holds the owner's logins) opens only
+  // for that owner, even though the app lives in a workspace other members
+  // can access.
+  if (!(await canAccessAgentApp(db, userId, app))) {
+    throw new HandlerError("FORBIDDEN_AGENT", `No access to agent ${app.forAgentId}`)
+  }
+}
+
 export function createOpenComputerHandler(deps: ComputerDomainDeps) {
   const { db, mcaService, computerViewService, warmUp, publicBaseUrl } = deps
 
@@ -48,9 +61,7 @@ export function createOpenComputerHandler(deps: ComputerDomainDeps) {
       if (!app) {
         throw new HandlerError("COMPUTER_NOT_FOUND", `No computer ${data.appId ?? data.appName}`)
       }
-      if (!(await canAccessWorkspace(db, ctx.userId, app.ownerId))) {
-        throw new HandlerError("FORBIDDEN_WORKSPACE", `No access to workspace ${app.ownerId}`)
-      }
+      await assertCanOpenApp(db, ctx.userId, app)
       appId = app.appId
       appName = app.name
       agentId = app.forAgentId ?? agentId

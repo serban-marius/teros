@@ -39,6 +39,7 @@ import * as fs from 'fs/promises';
 import type { Db } from 'mongodb';
 import * as path from 'path';
 import type { AuthManager } from '../auth/auth-manager';
+import { canAccessAgentApp } from '../auth/workspace-access';
 import { config } from '../config';
 import type { SecretsManager } from '../secrets/secrets-manager';
 import { createInstallPermissions } from '../types/permissions';
@@ -508,6 +509,14 @@ export class McaService {
   }
 
   /**
+   * Whether a user may use an agent's own app (App.forAgentId, e.g. its
+   * computer): only if they can access that agent. Other apps pass.
+   */
+  async canAccessAgentApp(userId: string, app: Pick<App, 'forAgentId'>): Promise<boolean> {
+    return canAccessAgentApp(this.db, userId, app);
+  }
+
+  /**
    * SEC-1 (TER-720 / A1): authorization for app.grant-access / app.revoke-access.
    *
    * Cross-tenant closure (the BOLA fix): the caller must be a member of the
@@ -725,6 +734,9 @@ export class McaService {
     if (!isOwner && !isWriter) {
       return { success: false, error: 'App not found or access denied' };
     }
+    if (!(await this.canAccessAgentApp(userId, app))) {
+      return { success: false, error: 'App not found or access denied' };
+    }
 
     // Validate format
     const validation = this.validateAppName(newName);
@@ -841,6 +853,9 @@ export class McaService {
     if (!isOwner && !isAdmin) {
       return { success: false, error: 'App not found or access denied' };
     }
+    if (!(await this.canAccessAgentApp(ownerId, app))) {
+      return { success: false, error: 'App not found or access denied' };
+    }
 
     // Check if it's a system app (cannot be uninstalled)
     const mca = await this.getMcaFromCatalog(app.mcaId);
@@ -903,6 +918,11 @@ export class McaService {
     // if (!agentWorkspaceId && appWorkspaceId) { throw ... }
     if (agentWorkspaceId && appWorkspaceId && agentWorkspaceId !== appWorkspaceId) {
       throw new Error('Agent and app must belong to the same workspace.');
+    }
+    // An agent's own app (e.g. its computer, with its owner's logins) is
+    // never shared with another agent, whoever asks.
+    if (app.forAgentId && app.forAgentId !== access.agentId) {
+      throw new Error(`App ${access.appId} belongs to agent ${app.forAgentId}`);
     }
 
     const newAccess: AgentAppAccess = {
@@ -1487,6 +1507,8 @@ export class McaService {
 
       const access = accessByAppId.get(appRaw.appId);
       if (!access) continue;
+      // Another agent's own app (e.g. its computer): a grant can't share it.
+      if (appRaw.forAgentId && appRaw.forAgentId !== agentId) continue;
 
       const { mcaId, ...appWithoutMcaId } = appRaw;
       apps.push({

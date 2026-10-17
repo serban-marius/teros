@@ -7,15 +7,22 @@
  * - ensureProvisionedApps: per-agent system MCAs are provisioned per agent and
  *   never collapsed by the per-owner duplicate repair.
  * - computer.open: workspace / superagent access checks, signed view URL.
+ * - A superagent's computer stays its owner's on every other path: agent
+ *   grants, an agent's app list, app.execute-tool, the HTTP app routes
+ *   (canAccessApp) and tool permission changes.
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test"
 import { resolve } from "node:path"
 import { type Db, MongoClient } from "mongodb"
+import { canAccessApp, canAccessWorkspace } from "../../src/auth/workspace-access"
 import { config } from "../../src/config"
+import { createExecuteToolHandler } from "../../src/handlers/domains/app/execute-tool"
+import { createUpdateToolPermissionHandler } from "../../src/handlers/domains/app/update-tool-permission"
 import { createOpenComputerHandler } from "../../src/handlers/domains/computer/open"
 import { ComputerViewService } from "../../src/services/computer-view-service"
 import { McaService } from "../../src/services/mca-service"
+import type { App } from "../../src/types/database"
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017"
 const DB_NAME = `teros_computer_test_${Date.now()}`
@@ -202,6 +209,18 @@ describe("computer.open", () => {
     expect(res.agentId).toBe("agent_super")
   })
 
+  it("a superagent’s computer stays the owner’s when opened by appId or app name", async () => {
+    await seedAgent("agent_super", "Super", null, OWNER)
+    await db.collection("workspace_members").insertOne({ workspaceId: WS, userId: "user_member" })
+    const app = await mcaService.ensurePerAgentApp("agent_super", MCA, WS)
+    for (const target of [{ appId: app.appId }, { appName: app.name, workspaceId: WS }]) {
+      await expect(open()({ userId: "user_member" } as never, target)).rejects.toMatchObject({
+        code: "FORBIDDEN_AGENT",
+      })
+      expect((await open()({ userId: OWNER } as never, target)).appId).toBe(app.appId)
+    }
+  })
+
   it("opens a computer by app name in a workspace (tool cards carry the tool name, not the appId)", async () => {
     await seedAgent("agent_a", "Alice")
     const app = await mcaService.ensurePerAgentApp("agent_a", MCA, WS)
@@ -228,5 +247,77 @@ describe("computer.open", () => {
     await expect(open()({ userId: OWNER } as never, { appId: "app_other" })).rejects.toMatchObject({
       code: "COMPUTER_NOT_FOUND",
     })
+  })
+})
+
+describe("a superagent’s computer on every other path", () => {
+  const MEMBER = "user_member"
+  let app: App
+
+  beforeEach(async () => {
+    await seedAgent("agent_super", "Super", null, OWNER)
+    await seedAgent("agent_b", "Bob")
+    await db.collection("workspace_members").insertOne({ workspaceId: WS, userId: MEMBER })
+    app = await mcaService.ensurePerAgentApp("agent_super", MCA, WS)
+  })
+
+  it("is never granted to another agent", async () => {
+    await expect(
+      mcaService.grantAccess({ agentId: "agent_b", appId: app.appId, grantedBy: MEMBER }),
+    ).rejects.toThrow("belongs to agent agent_super")
+    expect(await mcaService.hasAccess("agent_b", app.appId)).toBe(false)
+  })
+
+  it("is not among another agent’s apps, even with a stray grant", async () => {
+    await db
+      .collection("agent_app_access")
+      .insertOne({ agentId: "agent_b", appId: app.appId, grantedBy: MEMBER, grantedAt: "" })
+    const own = await mcaService.ensurePerAgentApp("agent_b", MCA, WS)
+    const { apps } = await mcaService.getAgentApps("agent_b", WS)
+    expect(apps.map((a) => a.app.appId)).toEqual([own.appId])
+  })
+
+  it("runs tools for its owner only (app.execute-tool)", async () => {
+    const calls: string[] = []
+    const execute = createExecuteToolHandler(
+      mcaService,
+      {
+        executeTool: async (name: string) => {
+          calls.push(name)
+          return { output: "{}", isError: false, mcaId: MCA }
+        },
+      } as never,
+      {
+        canAccess: (workspaceId: string, userId: string) =>
+          canAccessWorkspace(db, userId, workspaceId),
+      } as never,
+    )
+    await expect(
+      execute({ userId: MEMBER } as never, { appId: app.appId, tool: "screenshot" }),
+    ).rejects.toMatchObject({ code: "ACCESS_DENIED" })
+    expect(calls).toEqual([])
+    await execute({ userId: OWNER } as never, { appId: app.appId, tool: "screenshot" })
+    expect(calls).toEqual([`${app.name}_screenshot`])
+  })
+
+  it("is closed to other members on the HTTP app routes (canAccessApp)", async () => {
+    expect(await canAccessApp(db, MEMBER, app.appId)).toBe(false)
+    expect(await canAccessApp(db, OWNER, app.appId)).toBe(true)
+  })
+
+  it("keeps its tool permissions out of other workspace admins’ hands", async () => {
+    const update = createUpdateToolPermissionHandler(mcaService, null, {
+      canAdmin: async () => true,
+    } as never)
+    const change = { appId: app.appId, toolName: "run-command", permission: "allow" }
+    await expect(update({ userId: MEMBER } as never, change)).rejects.toMatchObject({
+      code: "ACCESS_DENIED",
+    })
+    expect((await mcaService.getApp(app.appId))?.permissions?.tools["run-command"]).toBe("ask")
+    await db
+      .collection("mca_catalog")
+      .updateOne({ mcaId: MCA }, { $set: { tools: ["run-command"] } })
+    await update({ userId: OWNER } as never, change)
+    expect((await mcaService.getApp(app.appId))?.permissions?.tools["run-command"]).toBe("allow")
   })
 })

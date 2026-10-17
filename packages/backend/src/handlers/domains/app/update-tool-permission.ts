@@ -61,7 +61,10 @@ export function createUpdateToolPermissionHandler(
       throw new HandlerError('APP_NOT_FOUND', 'App not found')
     }
 
-    if (!(await canManageApp(app, ctx.userId, workspaceService))) {
+    if (
+      !(await canManageApp(app, ctx.userId, workspaceService)) ||
+      !(await mcaService.canAccessAgentApp(ctx.userId, app))
+    ) {
       throw new HandlerError(
         'ACCESS_DENIED',
         'Access denied - you need admin access to modify permissions',

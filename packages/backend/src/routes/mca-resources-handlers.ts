@@ -988,6 +988,12 @@ export async function handleAccessGrant(
     return;
   }
 
+  // An agent's own app (e.g. its computer) is never granted to another agent.
+  if (app.forAgentId && app.forAgentId !== body.agentId) {
+    sendJson(res, 403, { error: 'Access denied to app' });
+    return;
+  }
+
   // Check if already granted
   const existing = await db.collection('agent_app_access').findOne({
     agentId: body.agentId,

@@ -137,6 +137,7 @@ describe('app.update-tool-permission → applyPermissionToPendingRequests', () =
     const app = { appId: 'app_notion', ownerId: 'user_1', name: 'notion', mcaId: 'mca.notion' }
     const mcaService = {
       getApp: async () => app,
+      canAccessAgentApp: async () => true,
       getMcaFromCatalog: async () => ({ name: 'notion', tools: ['create-page', 'delete-block'] }),
       updateToolPermission: async () => ({ ...app, permissions: { tools: {}, defaultPermission: 'ask' } }),
     } as any

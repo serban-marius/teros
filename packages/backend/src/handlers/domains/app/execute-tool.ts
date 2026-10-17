@@ -25,10 +25,11 @@ async function userHasAppAccess(
 ): Promise<boolean> {
   const app = await mcaService.getApp(appId)
   if (!app) return false
-  if (workspaceService) {
-    return workspaceService.canAccess(app.ownerId, userId)
-  }
-  return false
+  if (!workspaceService) return false
+  if (!(await workspaceService.canAccess(app.ownerId, userId))) return false
+  // An agent's own app (e.g. a superagent's computer) runs only for whoever
+  // can access that agent, not for every workspace member.
+  return mcaService.canAccessAgentApp(userId, app)
 }
 
 async function getExecutionContext(
