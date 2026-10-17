@@ -25,7 +25,7 @@ function render() {
   statusEl.className = `pill ${rfb ? (human ? "pill-human" : "pill-agent") : "pill-wait"}`
   statusEl.textContent = !rfb ? "Connecting…" : human ? "You are in control" : "Agent is driving"
   hintEl.textContent = human
-    ? "The agent is paused. Log in or do what you need, then hand back."
+    ? "The agent is paused. Log in or do what you need, then hand back. Right-click the desktop for the browser."
     : "View only. Take over to use the mouse and keyboard (the agent pauses)."
   takeBtn.hidden = !rfb || human
   releaseBtn.hidden = !rfb || !human

@@ -6,6 +6,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "bun:test"
+import type { BrowserStatus } from "../../src/browser"
 import { ControlLease } from "../../src/control"
 import { ComputerError } from "../../src/errors"
 import { buildTools, type ComputerRuntime, describeState, toScreen } from "../../src/tools"
@@ -15,6 +16,8 @@ type Call = [string, ...unknown[]]
 function fakeRuntime() {
   const calls: Call[] = []
   let fieldValue = ""
+  const desktopTitle: { value: string | null } = { value: "Example - Chromium" }
+  const browser = { running: true, launches: 0, status: { state: "running" } as BrowserStatus }
   const locator = {
     click: async (opts: unknown) => calls.push(["locator.click", opts]),
     fill: async (text: string) => {
@@ -36,13 +39,16 @@ function fakeRuntime() {
       wheel: async (dx: number, dy: number) => calls.push(["mouse.wheel", dx, dy]),
     },
     getByText: () => ({ first: () => ({ waitFor: async () => undefined }) }),
+    bringToFront: async () => {
+      calls.push(["page.bringToFront"])
+    },
   }
   const rt: ComputerRuntime = {
     scale: 1,
     control: new ControlLease(async () => undefined),
     desktop: {
       screenSize: async () => ({ width: 1280, height: 800 }),
-      activeWindowTitle: async () => "Example - Chromium",
+      activeWindowTitle: async () => desktopTitle.value,
       click: async (x, y, opts) => {
         calls.push(["desktop.click", x, y, opts])
       },
@@ -60,8 +66,16 @@ function fakeRuntime() {
       },
     },
     browser: {
-      isRunning: async () => true,
-      launch: async () => undefined,
+      isRunning: async () => browser.running,
+      launch: async () => {
+        if (browser.status.state === "restarting" && browser.status.crashLoop)
+          throw new ComputerError("browser_not_running", "crash loop")
+        browser.launches++
+        browser.running = true
+        browser.status = { state: "running" }
+      },
+      relaunchNow: async () => undefined,
+      status: () => browser.status,
       shutdown: async () => undefined,
       activePage: async () => page as never,
       tabs: async () => [{ index: 0, title: "Example", url: "https://example.com/", active: true }],
@@ -97,7 +111,7 @@ function fakeRuntime() {
   const tools = Object.fromEntries(buildTools(rt).map((t) => [t.name, t.config.handler]))
   const call = (name: string, args: Record<string, unknown> = {}) =>
     tools[name](args, {} as never) as Promise<{ output: string; attachments?: unknown[] }>
-  return { rt, calls, call }
+  return { rt, calls, call, browser, desktopTitle }
 }
 
 let f: ReturnType<typeof fakeRuntime>
@@ -233,5 +247,42 @@ describe("run-command", () => {
   it("returns exit code and stdout", async () => {
     const r = await f.call("run-command", { command: "ls ~" })
     expect(r.output).toBe("exit code 0\n--- stdout ---\nran ls ~")
+  })
+})
+
+describe("a closed or crashed browser", () => {
+  it("get-state brings it back instead of reporting it closed", async () => {
+    f.browser.running = false
+    f.browser.status = { state: "restarting", inMs: 300, failures: 0, crashLoop: false }
+    const r = await f.call("get-state")
+    expect(f.browser.launches).toBe(1)
+    expect(r.output).toContain("Browser: https://example.com/")
+  })
+
+  it("other tools say it is restarting and how to get it back now", async () => {
+    f.browser.running = false
+    f.browser.status = { state: "restarting", inMs: 300, failures: 0, crashLoop: false }
+    const r = await f.call("press-key", { keys: "Tab", observe: "summary" })
+    expect(r.output).toContain(
+      "Browser: restarting (it was closed or crashed; get-state or open-url",
+    )
+  })
+
+  it("get-state brings a minimized browser back to the front (bare desktop), not while a person drives", async () => {
+    f.desktopTitle.value = null
+    await f.call("get-state")
+    expect(f.calls).toContainEqual(["page.bringToFront"])
+    f.calls.length = 0
+    await f.rt.control.takeOver("user_1", "Ana")
+    await f.call("get-state")
+    expect(f.calls).not.toContainEqual(["page.bringToFront"])
+  })
+
+  it("a crash loop is reported with its retry time, not hidden", async () => {
+    f.browser.running = false
+    f.browser.status = { state: "restarting", inMs: 8_000, failures: 4, crashLoop: true }
+    const r = await f.call("get-state")
+    expect(r.output).toContain("crashed 4 times in a row and restarts by itself in 8s")
+    expect((await f.call("-health-check")).output).toContain("crashed 4 times")
   })
 })

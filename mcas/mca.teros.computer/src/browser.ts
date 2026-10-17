@@ -68,26 +68,159 @@ export interface TabInfo {
   active: boolean
 }
 
-/** The browser on the desktop, driven over CDP (snapshots, element refs, tabs). */
+export interface BrowserProcess {
+  on(event: "exit", listener: (code: number | null, signal: string | null) => void): unknown
+  unref(): void
+}
+
+export interface RestartPolicy {
+  /** After a deliberate close (clean exit of a browser that was up). */
+  cleanMs: number
+  /** First delay after a crash or a failed start; doubles per failure. */
+  baseMs: number
+  maxMs: number
+  /** Up this long and the failure streak is forgiven. */
+  stableMs: number
+}
+
+export const DEFAULT_RESTART_POLICY: RestartPolicy = {
+  cleanMs: 300,
+  baseMs: 1_000,
+  maxMs: 30_000,
+  stableMs: 60_000,
+}
+
+/** Failures in a row after which only an explicit request skips the backoff. */
+export const CRASH_LOOP_FAILURES = 3
+
+/**
+ * When to bring the browser back after it exited. A clean exit of a browser
+ * that had been up (the window's X, ctrl+shift+q) comes back at once; a crash,
+ * a kill or a start that dies right away backs off exponentially so a broken
+ * profile can't spin the CPU.
+ */
+export function nextRestart(
+  exit: { code: number | null; signal: string | null; uptimeMs: number },
+  failures: number,
+  policy: RestartPolicy = DEFAULT_RESTART_POLICY,
+): { delayMs: number; failures: number } {
+  if (exit.code === 0 && !exit.signal && exit.uptimeMs >= 5_000) {
+    return { delayMs: policy.cleanMs, failures: 0 }
+  }
+  const streak = (exit.uptimeMs >= policy.stableMs ? 0 : failures) + 1
+  return { delayMs: Math.min(policy.baseMs * 2 ** (streak - 1), policy.maxMs), failures: streak }
+}
+
+export type BrowserStatus =
+  | { state: "running" | "starting" | "stopped" }
+  | { state: "restarting"; inMs: number; failures: number; crashLoop: boolean }
+
+export interface DesktopBrowserOptions {
+  spawnBrowser?: (args: string[]) => BrowserProcess
+  cdpUp?: () => Promise<boolean>
+  repair?: () => Promise<void>
+  policy?: RestartPolicy
+  startTimeoutMs?: number
+  log?: (msg: string) => void
+}
+
+function spawnChromium(args: string[]): BrowserProcess {
+  const child = spawn(CHROMIUM, args, {
+    detached: true,
+    stdio: "ignore",
+    env: { ...process.env, DISPLAY },
+  })
+  child.unref()
+  return child
+}
+
+async function cdpAnswers(): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${CDP_PORT}/json/version`, {
+      signal: AbortSignal.timeout(1_000),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The browser on the desktop, driven over CDP (snapshots, element refs, tabs).
+ * It is supervised: whenever Chromium exits (closed by a person or the agent,
+ * crashed, OOM-killed) it is started again on the same profile, so the
+ * computer never ends up as a bare black desktop. Only shutdown() stops it.
+ */
 export class DesktopBrowser {
   private pw: PwBrowser | null = null
   private connecting: Promise<PwBrowser> | null = null
+  private launching: Promise<void> | null = null
+  private stopping = false
+  private failures = 0
+  private restartTimer: ReturnType<typeof setTimeout> | null = null
+  private restartAt = 0
+  private readonly spawnBrowser: (args: string[]) => BrowserProcess
+  private readonly cdpUp: () => Promise<boolean>
+  private readonly repair: () => Promise<void>
+  private readonly policy: RestartPolicy
+  private readonly startTimeoutMs: number
+  private readonly log: (msg: string) => void
 
-  private async cdpUp(): Promise<boolean> {
-    try {
-      const res = await fetch(`http://127.0.0.1:${CDP_PORT}/json/version`, {
-        signal: AbortSignal.timeout(1_000),
-      })
-      return res.ok
-    } catch {
-      return false
-    }
+  constructor(opts: DesktopBrowserOptions = {}) {
+    this.spawnBrowser = opts.spawnBrowser ?? spawnChromium
+    this.cdpUp = opts.cdpUp ?? cdpAnswers
+    this.repair = opts.repair ?? (() => repairProfile())
+    this.policy = opts.policy ?? DEFAULT_RESTART_POLICY
+    this.startTimeoutMs = opts.startTimeoutMs ?? 20_000
+    this.log = opts.log ?? ((msg) => console.error(`[computer] ${msg}`))
   }
 
-  private launching: Promise<void> | null = null
-
-  /** Start Chromium on the desktop if it isn't running (also after the user closed it). */
+  /**
+   * Start Chromium on the desktop if it isn't running. Called by the tools, so
+   * an agent never sees a closed browser: a pending automatic restart happens
+   * now, except in a crash loop (then it fails with the retry time).
+   */
   launch(startUrl?: string): Promise<void> {
+    if (this.restartTimer && !this.launching && this.failures >= CRASH_LOOP_FAILURES) {
+      const secs = Math.max(1, Math.ceil((this.restartAt - Date.now()) / 1_000))
+      return Promise.reject(
+        new ComputerError(
+          "browser_not_running",
+          `the browser crashed ${this.failures} times in a row; it restarts by itself in ${secs}s (call wait, then retry)`,
+        ),
+      )
+    }
+    return this.start(startUrl)
+  }
+
+  /** A person asked for the browser (desktop menu): start it now, forgiving a crash loop. */
+  relaunchNow(): Promise<void> {
+    this.failures = 0
+    return this.start()
+  }
+
+  status(): BrowserStatus {
+    if (this.stopping) return { state: "stopped" }
+    if (this.launching) return { state: "starting" }
+    if (this.restartTimer) {
+      return {
+        state: "restarting",
+        inMs: Math.max(0, this.restartAt - Date.now()),
+        failures: this.failures,
+        crashLoop: this.failures >= CRASH_LOOP_FAILURES,
+      }
+    }
+    return { state: "running" }
+  }
+
+  private start(startUrl?: string): Promise<void> {
+    if (this.stopping) {
+      return Promise.reject(
+        new ComputerError("browser_not_running", "the computer is shutting down"),
+      )
+    }
+    if (this.restartTimer) clearTimeout(this.restartTimer)
+    this.restartTimer = null
     this.launching ??= this.doLaunch(startUrl).finally(() => {
       this.launching = null
     })
@@ -96,19 +229,41 @@ export class DesktopBrowser {
 
   private async doLaunch(startUrl?: string): Promise<void> {
     if (await this.cdpUp()) return
-    await repairProfile()
-    const child = spawn(CHROMIUM, chromiumArgs(startUrl), {
-      detached: true,
-      stdio: "ignore",
-      env: { ...process.env, DISPLAY },
+    await this.repair()
+    const startedAt = Date.now()
+    const child = this.spawnBrowser(chromiumArgs(startUrl))
+    let exited = false
+    child.on("exit", (code, signal) => {
+      exited = true
+      this.onExit(code, signal, Date.now() - startedAt)
     })
-    child.unref()
-    const deadline = Date.now() + 20_000
-    while (Date.now() < deadline) {
+    const deadline = startedAt + this.startTimeoutMs
+    while (Date.now() < deadline && !exited) {
       if (await this.cdpUp()) return
       await new Promise((r) => setTimeout(r, 250))
     }
-    throw new ComputerError("browser_not_running", "Chromium did not start within 20s")
+    throw new ComputerError(
+      "browser_not_running",
+      exited
+        ? "Chromium exited right after starting; it is retried automatically"
+        : `Chromium did not start within ${Math.round(this.startTimeoutMs / 1_000)}s`,
+    )
+  }
+
+  private onExit(code: number | null, signal: string | null, uptimeMs: number): void {
+    this.pw = null
+    if (this.stopping) return
+    const next = nextRestart({ code, signal, uptimeMs }, this.failures, this.policy)
+    this.failures = next.failures
+    this.log(
+      `browser exited (${signal ?? `code ${code}`}, up ${Math.round(uptimeMs / 1_000)}s); restarting in ${next.delayMs}ms`,
+    )
+    if (this.restartTimer) clearTimeout(this.restartTimer)
+    this.restartAt = Date.now() + next.delayMs
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = null
+      this.start().catch((e) => this.log(`browser restart failed: ${e.message}`))
+    }, next.delayMs)
   }
 
   /** True when the browser answers; waits for a launch already in flight (boot autostart). */
@@ -122,6 +277,9 @@ export class DesktopBrowser {
    * cookie writes for ~30 s; a SIGKILL would lose the latest login).
    */
   async shutdown(timeoutMs = 4_000): Promise<void> {
+    this.stopping = true
+    if (this.restartTimer) clearTimeout(this.restartTimer)
+    this.restartTimer = null
     if (!(await this.cdpUp())) return
     try {
       const b = await this.connection(false)
@@ -140,7 +298,10 @@ export class DesktopBrowser {
     if (this.pw?.isConnected()) return this.pw
     if (!(await this.isRunning())) {
       if (!autoLaunch) {
-        throw new ComputerError("browser_not_running", "the browser is closed; open-url starts it")
+        throw new ComputerError(
+          "browser_not_running",
+          "the browser is not running (it restarts by itself; open-url starts it now)",
+        )
       }
       await this.launch()
     }
@@ -208,8 +369,8 @@ export class DesktopBrowser {
   }
 
   async tabs(): Promise<TabInfo[]> {
-    const pages = await this.pages(false)
-    const active = await this.activePage(false)
+    const pages = await this.pages()
+    const active = await this.activePage()
     return Promise.all(
       pages.map(async (p, index) => ({
         index,
@@ -221,7 +382,7 @@ export class DesktopBrowser {
   }
 
   async switchTab(index: number): Promise<Page> {
-    const pages = await this.pages(false)
+    const pages = await this.pages()
     const page = pages[index]
     if (!page) throw new ComputerError("invalid_argument", `no tab ${index} (have ${pages.length})`)
     await page.bringToFront()
@@ -229,7 +390,7 @@ export class DesktopBrowser {
   }
 
   async closeTab(index: number): Promise<void> {
-    const pages = await this.pages(false)
+    const pages = await this.pages()
     const page = pages[index]
     if (!page) throw new ComputerError("invalid_argument", `no tab ${index} (have ${pages.length})`)
     await page.close()

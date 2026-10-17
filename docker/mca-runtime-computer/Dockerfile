@@ -91,11 +91,13 @@ COPY docker/mca-runtime/entrypoint.sh /entrypoint.sh
 COPY docker/mca-runtime-computer/computer-entrypoint.sh /computer-entrypoint.sh
 COPY docker/mca-runtime-computer/computer-session.sh /usr/local/bin/computer-session
 COPY docker/mca-runtime-computer/openbox-rc.xml /etc/xdg/openbox/rc.xml
+COPY docker/mca-runtime-computer/openbox-menu.xml /etc/xdg/openbox/menu.xml
+COPY docker/mca-runtime-computer/teros-browser /usr/local/bin/teros-browser
 # Managed browser policy: restore the last session on start (which also keeps
 # session cookies, so a login survives a container restart like it survives a
 # laptop reboot), no saved passwords on disk, no browser sign-in/sync.
 COPY docker/mca-runtime-computer/chromium-policy.json /etc/chromium/policies/managed/teros.json
-RUN chmod +x /entrypoint.sh /computer-entrypoint.sh /usr/local/bin/computer-session
+RUN chmod +x /entrypoint.sh /computer-entrypoint.sh /usr/local/bin/computer-session /usr/local/bin/teros-browser
 
 ENV MCA_TRANSPORT=http
 ENV MCA_HTTP_PORT=3000

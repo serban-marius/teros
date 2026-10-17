@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Right-click on the desktop: a way back to the browser for a person who
+     closed or minimized it (it also restarts by itself). -->
+<openbox_menu xmlns="http://openbox.org/3.4/menu">
+  <menu id="root-menu" label="Computer">
+    <item label="Browser"><action name="Execute"><command>teros-browser</command></action></item>
+    <menu id="client-list-combined-menu"/>
+  </menu>
+</openbox_menu>

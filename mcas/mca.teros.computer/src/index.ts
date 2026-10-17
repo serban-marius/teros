@@ -9,6 +9,7 @@
  * computer-use tools and the live view (viewer routes, see viewer.ts).
  */
 
+import { writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { McaServer } from "@teros/mca-sdk"
@@ -24,6 +25,15 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const VNC_SOCKET = process.env.COMPUTER_VNC_SOCKET || "/tmp/teros-vnc/rfb.sock"
 const NOVNC_DIR = process.env.COMPUTER_NOVNC_DIR || "/opt/novnc"
 const HOME = process.env.HOME || "/home/teros"
+/** The desktop menu's "Browser" entry signals this pid (docker/mca-runtime-computer/teros-browser). */
+const PID_FILE = process.env.COMPUTER_PID_FILE || "/tmp/teros-computer.pid"
+
+/** Desktop menu → "Browser": start it if needed and bring its window back (also when minimized). */
+export async function showBrowser(rt: ComputerRuntime): Promise<void> {
+  await rt.browser.relaunchNow()
+  const page = await rt.browser.activePage()
+  await page.bringToFront()
+}
 
 export function createComputerRuntime(): ComputerRuntime {
   const desktop = new Desktop()
@@ -84,6 +94,11 @@ if (isDirectEntry) {
       console.error("Failed to start Teros Computer MCA:", err)
       process.exit(1)
     })
+
+  writeFileSync(PID_FILE, String(process.pid))
+  process.on("SIGUSR2", () => {
+    showBrowser(rt).catch((e) => console.error("[computer] show browser failed:", e.message))
+  })
 
   // Idle stop / backend shutdown: `docker stop` sends SIGTERM first.
   process.once("SIGTERM", () => {

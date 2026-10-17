@@ -1,6 +1,6 @@
 #!/bin/bash
 # Desktop session (runs as teros): Xvnc → openbox → MCA server (foreground).
-# The MCA starts Chromium itself (and restarts it on demand), so a crashed or
+# The MCA starts Chromium itself and restarts it whenever it exits, so a crashed or
 # user-closed browser never takes the computer down.
 set -e
 

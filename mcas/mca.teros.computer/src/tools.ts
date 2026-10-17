@@ -10,6 +10,7 @@
 
 import type { ToolConfig } from "@teros/mca-sdk"
 import type { Locator, Page } from "playwright-core"
+import type { BrowserStatus } from "./browser"
 import type { ControlLease } from "./control"
 import type { MouseButton, ScrollDirection } from "./desktop"
 import { ComputerError, invalidArgument } from "./errors"
@@ -37,6 +38,8 @@ export interface DesktopLike {
 export interface BrowserLike {
   isRunning(): Promise<boolean>
   launch(startUrl?: string): Promise<void>
+  relaunchNow(): Promise<void>
+  status(): BrowserStatus
   shutdown(timeoutMs?: number): Promise<void>
   activePage(autoLaunch?: boolean): Promise<Page>
   tabs(): Promise<Array<{ index: number; title: string; url: string; active: boolean }>>
@@ -157,6 +160,16 @@ function looksLikeBrowser(title: string | null): boolean {
   return !!title && /chromium/i.test(title)
 }
 
+/** Why there is no browser right now, and what brings it back. */
+function notRunning(rt: ComputerRuntime): string {
+  const status = rt.browser.status()
+  if (status.state !== "restarting") return "not running (open-url starts it)"
+  const secs = Math.ceil(status.inMs / 1_000)
+  return status.crashLoop
+    ? `not running — it crashed ${status.failures} times in a row and restarts by itself in ${secs}s`
+    : "restarting (it was closed or crashed; get-state or open-url brings it back now)"
+}
+
 /**
  * The state block every tool returns: who holds control, the focused window,
  * the browser tab, and (when asked) the page snapshot and a screenshot.
@@ -193,7 +206,7 @@ export async function describeState(
       lines.push(`Browser: ${page.url()} — "${pageTitle}" (tab ${idx + 1} of ${tabs.length})`)
     }
   } else {
-    lines.push("Browser: closed (open-url starts it)")
+    lines.push(`Browser: ${notRunning(rt)}`)
   }
 
   if (observe === "snapshot" && page) {
@@ -283,9 +296,9 @@ export function buildTools(rt: ComputerRuntime): RegisteredTool[] {
       annotations: { readOnlyHint: true },
       handler: async () => {
         const screen = await rt.desktop.screenSize()
-        const browser = await rt.browser.isRunning()
+        const browser = (await rt.browser.isRunning()) ? "running" : notRunning(rt)
         return {
-          output: `ok: display ${screen.width}×${screen.height}, browser ${browser ? "running" : "closed"}`,
+          output: `ok: display ${screen.width}×${screen.height}, browser ${browser}`,
         }
       },
     }),
@@ -308,6 +321,15 @@ export function buildTools(rt: ComputerRuntime): RegisteredTool[] {
       annotations: { readOnlyHint: true },
       handler: async (args) => {
         const maxChars = num(args.maxChars, "maxChars", 500, 100_000) ?? DEFAULT_MAX_CHARS
+        // Looking at the computer brings a closed or crashed browser back,
+        // and a minimized one (bare desktop) to the front.
+        await rt.browser.launch().catch(() => undefined)
+        if (rt.control.get().holder === "agent" && !(await rt.desktop.activeWindowTitle())) {
+          await rt.browser
+            .activePage(false)
+            .then((p) => p.bringToFront())
+            .catch(() => undefined)
+        }
         const snap = await describeState(rt, "snapshot", maxChars)
         if (args.screenshot !== true) return snap
         const shot = await describeState(rt, "screenshot")
@@ -668,11 +690,7 @@ export function buildTools(rt: ComputerRuntime): RegisteredTool[] {
             )
             .join("\n")
         }
-        if (action === "list") {
-          if (!(await rt.browser.isRunning()))
-            return { output: "Browser: closed (open-url starts it)" }
-          return { output: await list() }
-        }
+        if (action === "list") return { output: await list() }
         const index = num(args.index, "index", 0, 500)
         return act(async () => {
           if (action === "switch") {

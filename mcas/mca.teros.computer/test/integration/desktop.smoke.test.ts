@@ -183,6 +183,27 @@ describeIf("computer runtime image (smoke)", () => {
     expect(page.output).toContain("cookie:smoke=yes")
   }, 120_000)
 
+  it("brings the browser back when it is closed or killed, still logged in", async () => {
+    // A person clicking the window's X: Chromium's own close button, top right.
+    docker("exec", "-u", "teros", NAME, "xdotool", "mousemove", "1260", "20", "click", "1")
+    const down = Date.now()
+    let state = ""
+    while (Date.now() - down < 15_000) {
+      state = (await tool("-health-check")).output
+      if (state.includes("browser running") && !state.includes("restarting")) break
+      await new Promise((r) => setTimeout(r, 250))
+    }
+    expect(state).toContain("browser running")
+    expect((await tool("get-state", { maxChars: 500 })).output).toContain("Browser: http")
+
+    // A crash or OOM kill of the browser process: back without any tool call.
+    docker("exec", NAME, "pkill", "-KILL", "-o", "-x", "chromium")
+    await new Promise((r) => setTimeout(r, 4_000))
+    expect((await tool("-health-check")).output).toContain("browser running")
+    const page = await tool("open-url", { url: "http://127.0.0.1:8099/whoami" })
+    expect(page.output).toContain("cookie:smoke=yes")
+  }, 60_000)
+
   it("rejects viewer routes without the backend token", async () => {
     expect((await fetch(`http://127.0.0.1:${PORT}/viewer/control`)).status).toBe(401)
   })
