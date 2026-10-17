@@ -205,21 +205,38 @@ export function createDefaultPermissions(): AppToolPermissions {
  *
  * `defaultPermission` stays 'ask' so tools added by a later MCA update are
  * conservative until the user (or a re-seed) touches them.
+ *
+ * `forAgent`: the app is one agent's own instance (`App.forAgentId`, e.g. its
+ * computer). Tools marked `sandboxedHint` (they only act inside that sandbox,
+ * visibly) are then seeded 'allow' too, so a desktop loop doesn't ask on
+ * every click. Same data afterwards: the user can tighten them per tool.
  */
 export function createInstallPermissions(
   tools: Array<{ name: string; annotations?: McaToolAnnotations }>,
+  options: { forAgent?: boolean } = {},
 ): AppToolPermissions {
   const perms: Record<string, ToolPermission> = {};
   for (const tool of tools) {
     if (isPrivateTool(tool.name)) continue;
-    const readOnly = tool.annotations?.readOnlyHint === true;
-    const locked = tool.annotations?.alwaysAsk === true;
-    perms[tool.name] = readOnly && !locked ? 'allow' : 'ask';
+    perms[tool.name] = isAllowedAtInstall(tool.annotations, options.forAgent === true) ? 'allow' : 'ask';
   }
   return {
     tools: perms,
     defaultPermission: 'ask',
   };
+}
+
+/**
+ * Whether the install seed allows a tool: read-only tools always, and
+ * sandboxed tools on an agent's own app instance. `alwaysAsk` always wins.
+ */
+export function isAllowedAtInstall(
+  annotations: McaToolAnnotations | undefined,
+  forAgent: boolean,
+): boolean {
+  if (annotations?.alwaysAsk === true) return false;
+  if (annotations?.readOnlyHint === true) return true;
+  return forAgent && annotations?.sandboxedHint === true;
 }
 
 /**

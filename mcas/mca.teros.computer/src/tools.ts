@@ -282,6 +282,13 @@ function reg(name: string, config: AnyTool): RegisteredTool {
 // TOOLS
 // ============================================================================
 
+/**
+ * Input on this desktop: it only acts inside the agent's own computer and a
+ * person can watch it in the live view, so the agent's own instance allows it
+ * by default (run-command, whose effect isn't visible, keeps asking).
+ */
+const SANDBOXED = { sandboxedHint: true } as const
+
 export function buildTools(rt: ComputerRuntime): RegisteredTool[] {
   const act = async <T>(fn: () => Promise<T>): Promise<T> =>
     serialized(async () => {
@@ -384,6 +391,7 @@ export function buildTools(rt: ComputerRuntime): RegisteredTool[] {
           observe: observeParam,
         },
       },
+      annotations: SANDBOXED,
       handler: async (args) => {
         const ref = str(args.ref, "ref")
         const button = (str(args.button, "button") ?? "left") as MouseButton
@@ -450,6 +458,7 @@ export function buildTools(rt: ComputerRuntime): RegisteredTool[] {
         },
         required: ["text"],
       },
+      annotations: SANDBOXED,
       handler: async (args) => {
         const text = str(args.text, "text")
         if (text === undefined) throw invalidArgument("text is required")
@@ -518,6 +527,7 @@ export function buildTools(rt: ComputerRuntime): RegisteredTool[] {
         },
         required: ["keys"],
       },
+      annotations: SANDBOXED,
       handler: async (args) => {
         const keys = str(args.keys, "keys")
         if (!keys) throw invalidArgument("keys is required")
@@ -556,6 +566,7 @@ export function buildTools(rt: ComputerRuntime): RegisteredTool[] {
         },
         required: ["direction"],
       },
+      annotations: SANDBOXED,
       handler: async (args) => {
         const direction = str(args.direction, "direction") as ScrollDirection
         if (!["up", "down", "left", "right"].includes(direction)) {
@@ -612,6 +623,7 @@ export function buildTools(rt: ComputerRuntime): RegisteredTool[] {
         },
         required: ["fromX", "fromY", "toX", "toY"],
       },
+      annotations: SANDBOXED,
       handler: async (args) => {
         const observe = observeOf(args.observe, "screenshot")
         const pts = ["fromX", "fromY", "toX", "toY"].map((k) => num(args[k], k, 0, 10_000))
@@ -642,6 +654,7 @@ export function buildTools(rt: ComputerRuntime): RegisteredTool[] {
         },
         required: ["url"],
       },
+      annotations: SANDBOXED,
       handler: async (args) => {
         const raw = str(args.url, "url")
         if (!raw) throw invalidArgument("url is required")
@@ -680,6 +693,7 @@ export function buildTools(rt: ComputerRuntime): RegisteredTool[] {
           url: { type: "string", description: "URL for action=new (optional)." },
         },
       },
+      annotations: SANDBOXED,
       handler: async (args) => {
         const action = str(args.action, "action") ?? "list"
         const list = async () => {

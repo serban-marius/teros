@@ -437,7 +437,12 @@ export class McaService {
       // (allow for read-only, ask for mutations) unless the caller already
       // decided them. Permissions are pure data from here on — no runtime
       // policy upgrades anything.
-      permissions: app.permissions ?? createInstallPermissions(this.loadStaticToolDefs(app.mcaId)),
+      // An agent's own instance (forAgentId) also allows its sandboxed tools.
+      permissions:
+        app.permissions ??
+        createInstallPermissions(this.loadStaticToolDefs(app.mcaId), {
+          forAgent: !!app.forAgentId,
+        }),
       // Core platform tools (messages, tasks, agent management) are used on
       // nearly every turn — pin them out of the tool-execution proxy so they
       // stay individually listed and skip the discovery round-trip.

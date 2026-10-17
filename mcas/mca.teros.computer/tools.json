@@ -90,6 +90,9 @@
             "description": "What to return after acting. snapshot (default): summary + accessibility snapshot with fresh refs. summary: control/window/url only. screenshot: summary + screenshot. none: nothing."
           }
         }
+      },
+      "annotations": {
+        "sandboxedHint": true
       }
     },
     {
@@ -121,6 +124,9 @@
           }
         },
         "required": ["text"]
+      },
+      "annotations": {
+        "sandboxedHint": true
       }
     },
     {
@@ -140,6 +146,9 @@
           }
         },
         "required": ["keys"]
+      },
+      "annotations": {
+        "sandboxedHint": true
       }
     },
     {
@@ -176,6 +185,9 @@
           }
         },
         "required": ["direction"]
+      },
+      "annotations": {
+        "sandboxedHint": true
       }
     },
     {
@@ -207,6 +219,9 @@
           }
         },
         "required": ["fromX", "fromY", "toX", "toY"]
+      },
+      "annotations": {
+        "sandboxedHint": true
       }
     },
     {
@@ -230,6 +245,9 @@
           }
         },
         "required": ["url"]
+      },
+      "annotations": {
+        "sandboxedHint": true
       }
     },
     {
@@ -252,6 +270,9 @@
             "description": "URL for action=new (optional)."
           }
         }
+      },
+      "annotations": {
+        "sandboxedHint": true
       }
     },
     {

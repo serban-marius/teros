@@ -89,6 +89,15 @@ export const McaToolAnnotationsSchema = z.object({
    * Same `optional()`-without-default rationale as `irreversible` above.
    */
   alwaysAsk: z.boolean().optional(),
+  /**
+   * Teros hint — the tool only acts inside the agent's own sandboxed instance
+   * and its effect is visible to a person watching it (e.g. GUI input on the
+   * agent's computer, shown in the live view). Honoured only when permissions
+   * are seeded for an app provisioned for one agent (`App.forAgentId`): the
+   * tool then starts as 'allow'. Anywhere else it seeds like any mutation
+   * ('ask'). Never overrides `alwaysAsk`, and the user can change it after.
+   */
+  sandboxedHint: z.boolean().optional(),
 
   // MCP canonical annotations (Phase 2.7 — TER-348). Aligned with MCP spec
   // and with the `ToolAnnotations` interface in `@teros/mca-sdk`'s

@@ -10,7 +10,9 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test"
+import { resolve } from "node:path"
 import { type Db, MongoClient } from "mongodb"
+import { config } from "../../src/config"
 import { createOpenComputerHandler } from "../../src/handlers/domains/computer/open"
 import { ComputerViewService } from "../../src/services/computer-view-service"
 import { McaService } from "../../src/services/mca-service"
@@ -24,6 +26,9 @@ const OWNER = "user_owner"
 let client: MongoClient
 let db: Db
 let mcaService: McaService
+// The install seed reads the real manifest (mcas/mca.teros.computer/tools.json).
+const mcaConfig = config.mca as { basePath: string }
+const originalMcaBasePath = mcaConfig.basePath
 
 async function seedAgent(
   agentId: string,
@@ -38,9 +43,11 @@ beforeAll(async () => {
   client = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 3000 })
   await client.connect()
   db = client.db(DB_NAME)
+  mcaConfig.basePath = resolve(import.meta.dir, "../../../../mcas")
 })
 
 afterAll(async () => {
+  mcaConfig.basePath = originalMcaBasePath
   await db.dropDatabase()
   await client.close()
 })
@@ -98,6 +105,29 @@ describe("ensurePerAgentApp", () => {
     expect(a2.appId).toBe(a1.appId)
     expect(b.appId).not.toBe(a1.appId)
     expect(await db.collection("apps").countDocuments({ mcaId: MCA })).toBe(2)
+  })
+
+  it("lets the agent use its own computer without asking, except run-command", async () => {
+    await seedAgent("agent_a", "Alice")
+    const app = await mcaService.ensurePerAgentApp("agent_a", MCA, WS)
+    expect(app.permissions?.defaultPermission).toBe("ask")
+    const tools = app.permissions?.tools ?? {}
+    for (const tool of [
+      "get-state",
+      "screenshot",
+      "click",
+      "type-text",
+      "press-key",
+      "scroll",
+      "drag",
+      "open-url",
+      "tabs",
+      "wait",
+      "control-status",
+    ]) {
+      expect([tool, tools[tool]]).toEqual([tool, "allow"])
+    }
+    expect(tools["run-command"]).toBe("ask")
   })
 
   it("refuses MCAs that are not per-agent", async () => {

@@ -85,6 +85,8 @@ export interface ToolAnnotations {
   irreversible?: boolean;
   /** Teros policy — tool NEVER runs without human confirmation; user 'allow' config is ignored. */
   alwaysAsk?: boolean;
+  /** Teros — acts only inside the agent's own sandbox, visibly (computer GUI input). Allowed by default on an agent's own app instance. */
+  sandboxedHint?: boolean;
   /** MCP spec hint — tool only reads, never mutates state. Clients MAY auto-approve. */
   readOnlyHint?: boolean;
   /** MCP spec hint — tool may modify or delete state irreversibly. Clients SHOULD confirm. */

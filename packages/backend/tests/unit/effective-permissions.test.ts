@@ -86,6 +86,30 @@ describe('createInstallPermissions — install-time seed', () => {
   })
 })
 
+describe('createInstallPermissions — an agent’s own instance (forAgent)', () => {
+  const SANDBOXED: McaToolAnnotations = { sandboxedHint: true }
+  const defs = [
+    { name: 'get-state', annotations: RO },
+    { name: 'click', annotations: SANDBOXED },
+    { name: 'run-command' },
+    { name: 'install-app', annotations: { sandboxedHint: true, alwaysAsk: true } },
+  ]
+
+  it('sandboxed tools start as allow on the agent’s own app; others as usual', () => {
+    expect(createInstallPermissions(defs, { forAgent: true }).tools).toEqual({
+      'get-state': 'allow',
+      click: 'allow',
+      'run-command': 'ask',
+      'install-app': 'ask', // alwaysAsk still wins
+    })
+  })
+
+  it('the hint alone allows nothing: shared instances seed sandboxed tools as ask', () => {
+    expect(createInstallPermissions(defs).tools.click).toBe('ask')
+    expect(createInstallPermissions(defs, { forAgent: false }).tools.click).toBe('ask')
+  })
+})
+
 describe('getEffectiveToolPermission — configured value is what runs', () => {
   it('returns the configured value untouched for normal tools', () => {
     expect(getEffectiveToolPermission(app('ask', { 'get-page': 'allow' }), 'get-page', RO)).toBe('allow')
