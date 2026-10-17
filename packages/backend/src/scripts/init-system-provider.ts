@@ -12,6 +12,10 @@
  *   # or from root:
  *   npm run init:system-provider
  *
+ * With none of the SYSTEM_* keys set, the platform default provider
+ * (`.secrets/system/default-provider.json`) is used instead. The backend also
+ * does this on its own at every boot (platform-default-provider.ts).
+ *
  * Environment Variables:
  *   SYSTEM_ANTHROPIC_API_KEY - API key for Anthropic (preferred)
  *   SYSTEM_OPENAI_API_KEY    - API key for OpenAI (alternative)
@@ -39,8 +43,9 @@ interface SystemProviderConfig {
 
 /**
  * Determine which provider to use based on environment variables
+ * (null: none set — fall back to the platform default provider)
  */
-function getSystemProviderConfig(): SystemProviderConfig {
+function getSystemProviderConfig(): SystemProviderConfig | null {
   // Check for OpenRouter (preferred - supports all models)
   if (process.env.SYSTEM_OPENROUTER_API_KEY) {
     return {
@@ -68,8 +73,12 @@ function getSystemProviderConfig(): SystemProviderConfig {
     }
   }
 
-  throw new Error(
-    "No system provider configured. Please set one of:\n" +
+  return null
+}
+
+function noSystemProviderError(): Error {
+  return new Error(
+    "No system provider configured. Configure .secrets/system/default-provider.json, or set one of:\n" +
       "  - SYSTEM_OPENROUTER_API_KEY (recommended - supports all models)\n" +
       "  - SYSTEM_ANTHROPIC_API_KEY\n" +
       "  - SYSTEM_OPENAI_API_KEY\n\n" +
@@ -93,11 +102,13 @@ async function initSystemProvider(): Promise<void> {
   // Validate configuration
   const providerConfig = getSystemProviderConfig()
 
-  console.log(`📋 Configuration:`)
-  console.log(`   Provider Type: ${providerConfig.providerType}`)
-  console.log(`   Display Name:  ${providerConfig.displayName}`)
-  console.log(`   API Key:       ${providerConfig.apiKey.substring(0, 10)}...`)
-  console.log("")
+  if (providerConfig) {
+    console.log(`📋 Configuration:`)
+    console.log(`   Provider Type: ${providerConfig.providerType}`)
+    console.log(`   Display Name:  ${providerConfig.displayName}`)
+    console.log(`   API Key:       ${providerConfig.apiKey.substring(0, 10)}...`)
+    console.log("")
+  }
 
   // Load secrets and connect to MongoDB
   console.log("🔌 Connecting to MongoDB...")
@@ -117,6 +128,19 @@ async function initSystemProvider(): Promise<void> {
     console.log("✅ Connected to MongoDB\n")
 
     const providerService = new ProviderService(db)
+
+    if (!providerConfig) {
+      const platform = providerService.getPlatformDefaultProvider()
+      if (!platform) throw noSystemProviderError()
+      const provider = await providerService.ensureSystemPlatformDefaultProvider()
+      console.log(
+        provider
+          ? `✅ System provider is the platform default '${platform.displayName}' ` +
+              `(${provider.providerId}, model ${platform.systemModelId})`
+          : "ℹ️  The system user already has its own provider; left unchanged.",
+      )
+      return
+    }
 
     // Check if system provider already exists
     console.log("🔍 Checking for existing system provider...")

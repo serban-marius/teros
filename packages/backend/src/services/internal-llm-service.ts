@@ -12,7 +12,8 @@
 
 import { type ILLMClient, LLMClientFactory, type LLMConfig } from "@teros/core"
 import type { Db } from "mongodb"
-import type { ProviderService } from "./provider-service"
+import { isPlatformDefaultRecord, SYSTEM_USER_ID } from "./platform-default-provider"
+import type { ProviderModel, ProviderService, UserProviderRecord } from "./provider-service"
 
 export interface InternalLLMServiceConfig {
   /** Model ID to use (e.g., 'claude-haiku-4-5') */
@@ -20,7 +21,93 @@ export interface InternalLLMServiceConfig {
 }
 
 const DEFAULT_MODEL_ID = "openrouter-claude-haiku-4-5"
-const SYSTEM_USER_ID = "system"
+
+/** Provider types whose system provider needs an API key (openai-compatible: optional). */
+const SYSTEM_PROVIDERS_REQUIRING_KEY = ["anthropic", "openai", "openrouter", "google", "together"]
+
+/**
+ * Build an LLM client on the `system` user's provider — the one internal
+ * services use (channel naming, summaries, agent profile generation).
+ *
+ * Model choice: the platform default's `systemModel` when the system provider
+ * is the managed platform default, else `preferModel`, else the provider's
+ * default model, else its first model.
+ */
+export async function createSystemLLMClient(
+  providerService: ProviderService,
+  opts: {
+    maxTokens: number
+    preferModel?: (models: ProviderModel[]) => ProviderModel | undefined
+  },
+): Promise<{ client: ILLMClient; model: ProviderModel; provider: UserProviderRecord }> {
+  const providers = await providerService.listUserProviders(SYSTEM_USER_ID)
+  const provider = providers.find((p) => p.status === "active") || providers[0]
+  if (!provider) {
+    throw new Error(
+      "[InternalLLM] No provider configured for system user. Run: npm run init:system-provider " +
+        "(or configure .secrets/system/default-provider.json)",
+    )
+  }
+
+  const platform = isPlatformDefaultRecord(provider)
+    ? providerService.getPlatformDefaultProvider()
+    : null
+  const model =
+    (platform && provider.models.find((m) => m.modelId === platform.systemModelId)) ||
+    opts.preferModel?.(provider.models) ||
+    provider.models.find((m) => m.modelId === provider.defaultModelId) ||
+    provider.models[0]
+  if (!model) {
+    throw new Error(`[InternalLLM] No models available in system provider ${provider.providerId}`)
+  }
+
+  const secrets = await providerService.resolveProviderSecrets(provider)
+  if (
+    !secrets ||
+    (SYSTEM_PROVIDERS_REQUIRING_KEY.includes(provider.providerType) && !secrets.apiKey)
+  ) {
+    throw new Error(`[InternalLLM] Failed to resolve secrets for provider ${provider.providerId}`)
+  }
+
+  const llmConfig = buildSystemLLMConfig(provider, model, secrets.apiKey, opts.maxTokens)
+  if (platform?.systemExtraBody && llmConfig["openai-compatible"]) {
+    llmConfig["openai-compatible"].extraBody = platform.systemExtraBody
+  }
+  return { client: await LLMClientFactory.create(llmConfig), model, provider }
+}
+
+function buildSystemLLMConfig(
+  provider: UserProviderRecord,
+  model: ProviderModel,
+  apiKey: string | undefined,
+  maxTokens: number,
+): LLMConfig {
+  const base = { model: model.modelString, maxTokens }
+  switch (provider.providerType) {
+    case "anthropic":
+      return { provider: "anthropic", anthropic: { ...base, apiKey } }
+    case "openai":
+      return { provider: "openai", openai: { ...base, apiKey: apiKey as string } }
+    case "openrouter":
+      return { provider: "openrouter", openrouter: { ...base, apiKey: apiKey as string } }
+    case "google":
+      return { provider: "google", google: { ...base, apiKey: apiKey as string } }
+    case "together":
+      return { provider: "together", together: { ...base, apiKey: apiKey as string } }
+    case "openai-compatible":
+      return {
+        provider: "openai-compatible",
+        "openai-compatible": {
+          ...base,
+          baseUrl: provider.config?.baseUrl,
+          apiKey,
+          customHeaders: provider.config?.customHeaders,
+        },
+      }
+    default:
+      throw new Error(`[InternalLLM] Unsupported provider: ${provider.providerType}`)
+  }
+}
 
 export class InternalLLMService {
   private client: ILLMClient | null = null
@@ -43,83 +130,17 @@ export class InternalLLMService {
       return this.client
     }
 
-    // Get system user's providers
-    const providers = await this.providerService.listUserProviders(SYSTEM_USER_ID)
-    if (providers.length === 0) {
-      throw new Error(
-        `[InternalLLM] No provider configured for system user. Run: npm run init:system-provider`,
-      )
-    }
-
-    // Use the first active provider
-    const provider = providers.find((p) => p.status === "active") || providers[0]
-
-    // Find the requested model in this provider
-    const model = provider.models.find((m) => m.modelId === this.modelId)
-    if (!model) {
-      // Fallback to first available model
-      const fallbackModel = provider.models[0]
-      console.warn(`[InternalLLM] Model ${this.modelId} not found, using ${fallbackModel.modelId}`)
-      this.modelId = fallbackModel.modelId
-    }
-
-    const modelToUse = model || provider.models[0]
+    const { client, model, provider } = await createSystemLLMClient(this.providerService, {
+      maxTokens: 200, // Internal tasks don't need long outputs
+      preferModel: (models) => models.find((m) => m.modelId === this.modelId),
+    })
+    this.modelId = model.modelId
 
     console.log(
-      `[InternalLLM] Using model: ${modelToUse.modelId} (${provider.providerType}) from system provider`,
+      `[InternalLLM] Using model: ${model.modelId} (${provider.providerType}) from system provider`,
     )
 
-    // Get decrypted secrets
-    const secrets = await this.providerService.getProviderSecrets(
-      SYSTEM_USER_ID,
-      provider.providerId,
-    )
-
-    if (!secrets || !secrets.apiKey) {
-      throw new Error(`[InternalLLM] Failed to decrypt secrets for provider ${provider.providerId}`)
-    }
-
-    // Build LLMConfig based on provider type
-    const llmConfig: LLMConfig = {
-      provider: provider.providerType as LLMConfig["provider"],
-    }
-
-    // Configure provider-specific settings
-    if (provider.providerType === "anthropic") {
-      llmConfig.anthropic = {
-        apiKey: secrets.apiKey,
-        model: modelToUse.modelString,
-        maxTokens: 200, // Internal tasks don't need long outputs
-      }
-    } else if (provider.providerType === "openai") {
-      llmConfig.openai = {
-        apiKey: secrets.apiKey,
-        model: modelToUse.modelString,
-        maxTokens: 200,
-      }
-    } else if (provider.providerType === "openrouter") {
-      llmConfig.openrouter = {
-        apiKey: secrets.apiKey,
-        model: modelToUse.modelString,
-        maxTokens: 200,
-      }
-    } else if (provider.providerType === "google") {
-      llmConfig.google = {
-        apiKey: secrets.apiKey!,
-        model: modelToUse.modelString,
-        maxTokens: 200,
-      }
-    } else if (provider.providerType === "together") {
-      llmConfig.together = {
-        apiKey: secrets.apiKey,
-        model: modelToUse.modelString,
-        maxTokens: 200,
-      }
-    } else {
-      throw new Error(`[InternalLLM] Unsupported provider: ${provider.providerType}`)
-    }
-
-    this.client = await LLMClientFactory.create(llmConfig)
+    this.client = client
     return this.client
   }
 

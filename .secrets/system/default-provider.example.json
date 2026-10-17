@@ -1,0 +1,16 @@
+{
+  "displayName": "NaN Builders",
+  "baseUrl": "https://api.nan.builders/v1",
+  "apiKey": "YOUR_PROVIDER_API_KEY",
+  "defaultModel": "qwen3.6",
+  "models": [
+    { "id": "qwen3.6", "vision": true },
+    { "id": "deepseek-v4-flash", "vision": true },
+    { "id": "mimo-v2.6-flash", "vision": true },
+    { "id": "qwen3.8-flash" },
+    { "id": "gemma4" },
+    { "id": "glm5.3-flash" }
+  ],
+  "systemModel": "qwen3.6",
+  "systemExtraBody": { "chat_template_kwargs": { "enable_thinking": false } }
+}

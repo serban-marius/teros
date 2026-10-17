@@ -59,6 +59,12 @@ export interface OpenAICompatibleConfig {
    * for generic endpoints (Tower, LM Studio, vLLM). Resolves gap C1.
    */
   actualProvider?: string
+  /**
+   * Extra fields merged into every chat-completions request body (e.g.
+   * `{ chat_template_kwargs: { enable_thinking: false } }` to turn reasoning
+   * off on vLLM-served models). The adapter's own fields win on conflict.
+   */
+  extraBody?: Record<string, unknown>
 }
 
 /**
@@ -75,6 +81,7 @@ export class OpenAICompatibleLLMAdapter implements ILLMClient {
   private baseUrl: string
   /** Real upstream provider label for the `actualProvider` telemetry dimension. */
   private actualProvider: string
+  private extraBody: Record<string, unknown>
   private logger = createLogger("OpenAICompatibleLLM")
   private imagePipeline = new ImagePipeline()
   private documentExtractor = new DocumentExtractor()
@@ -102,6 +109,7 @@ export class OpenAICompatibleLLMAdapter implements ILLMClient {
     this.defaultModel = config.model
     this.defaultMaxTokens = config.defaultMaxTokens || 32768
     this.actualProvider = config.actualProvider || "openai-compatible"
+    this.extraBody = config.extraBody || {}
 
     log.info("OpenAICompatibleLLM", "Initialized adapter", {
       baseUrl: apiBaseUrl,
@@ -151,6 +159,7 @@ export class OpenAICompatibleLLMAdapter implements ILLMClient {
 
     try {
       const createParams: any = {
+        ...this.extraBody,
         model: model || this.defaultModel,
         temperature: temperature ?? 0.7,
         messages: openaiMessages,

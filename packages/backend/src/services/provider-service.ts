@@ -14,6 +14,13 @@ import { HttpClient } from '../lib/HttpClient';
 import { getActiveModelsByProvider } from '../models/definitions';
 import { secrets } from '../secrets/secrets-manager';
 import { canUseTerosModel, getUserTerosProviderConfig, decryptTerosProviderApiKey, UpgradeRequiredError, assertTerosHoursAvailable, assertAccountNotBlocked } from './billing-gate.js';
+import {
+  isPlatformDefaultRecord,
+  PLATFORM_DEFAULT_MANAGED_BY,
+  type PlatformDefaultProvider,
+  readPlatformDefaultProvider,
+  SYSTEM_USER_ID,
+} from './platform-default-provider';
 
 // Dedicated HTTP client for local provider discovery (Ollama, OpenAI-compatible)
 const providerDiscoveryClient = new HttpClient({
@@ -106,6 +113,14 @@ export interface UserProviderRecord {
    * Only one provider per user should have isDefault: true.
    */
   isDefault?: boolean;
+  /**
+   * Set on records the platform manages (`'platform-default'`: the operator's
+   * default provider, see platform-default-provider.ts). Their credentials come
+   * from a system secret, and the boot sync keeps them in step with it.
+   */
+  managedBy?: typeof PLATFORM_DEFAULT_MANAGED_BY;
+  /** When the platform default first took (or was offered) the user's default slot. */
+  defaultClaimedAt?: string;
   priority: number;
   status: 'active' | 'error' | 'disabled';
   lastTestedAt?: string;
@@ -154,7 +169,17 @@ export interface ResolvedProvider {
 // ============================================================================
 
 export class ProviderService {
-  constructor(private db: Db) {}
+  constructor(
+    private db: Db,
+    /** Source of the platform default provider; injectable for tests. */
+    private readPlatformDefault: () => PlatformDefaultProvider | null = () =>
+      readPlatformDefaultProvider(secrets),
+  ) {}
+
+  /** The operator-configured platform default provider, or null when unset. */
+  getPlatformDefaultProvider(): PlatformDefaultProvider | null {
+    return this.readPlatformDefault();
+  }
 
   // --------------------------------------------------------------------------
   // CRUD Operations
@@ -262,6 +287,109 @@ export class ProviderService {
   }
 
   /**
+   * Ensure the user has the platform default provider (when one is configured)
+   * and that it is in step with the configuration. Returns null when unset.
+   *
+   * Network-free, like `ensureDefaultTerosProvider`: models come from the
+   * configuration and the key stays in the system secret.
+   *
+   * Default slot: the record claims `isDefault` when the user has no default,
+   * or — the first time only — when the default is the built-in `teros`
+   * provider (the platform's own previous default). It never takes the slot
+   * from a provider the user added, and never takes it back once the user
+   * moved it elsewhere.
+   */
+  async ensurePlatformDefaultProvider(userId: string): Promise<UserProviderRecord | null> {
+    const platform = this.readPlatformDefault();
+    if (!platform) return null;
+
+    const coll = this.db.collection<UserProviderRecord>('user_providers');
+    const now = new Date().toISOString();
+    const managed = {
+      displayName: platform.displayName,
+      config: {
+        baseUrl: platform.baseUrl,
+        ...(platform.customHeaders ? { customHeaders: platform.customHeaders } : {}),
+      },
+      models: platform.models,
+      defaultModelId: platform.defaultModelId,
+      status: 'active' as const,
+      updatedAt: now,
+    };
+
+    const existing = await coll.findOne({ userId, managedBy: PLATFORM_DEFAULT_MANAGED_BY });
+    let provider: UserProviderRecord;
+    if (existing) {
+      await coll.updateOne({ providerId: existing.providerId }, { $set: managed });
+      provider = { ...existing, ...managed };
+    } else {
+      provider = {
+        providerId: `prov_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+        userId,
+        providerType: 'openai-compatible',
+        managedBy: PLATFORM_DEFAULT_MANAGED_BY,
+        isDefault: false,
+        priority: 100,
+        createdAt: now,
+        ...managed,
+      };
+      await coll.insertOne(provider);
+    }
+
+    const currentDefault = await coll.findOne({ userId, isDefault: true });
+    const claim =
+      !currentDefault ||
+      (!provider.defaultClaimedAt && currentDefault.providerType === 'teros');
+    if (claim && currentDefault?.providerId !== provider.providerId) {
+      await coll.updateMany(
+        { userId, isDefault: true, providerId: { $ne: provider.providerId } },
+        { $set: { isDefault: false, updatedAt: now } },
+      );
+      await coll.updateOne(
+        { providerId: provider.providerId },
+        { $set: { isDefault: true, defaultClaimedAt: now } },
+      );
+      return { ...provider, isDefault: true, defaultClaimedAt: now };
+    }
+    if (!provider.defaultClaimedAt) {
+      // Offered once: the user's own default stays, later boots don't retry.
+      await coll.updateOne({ providerId: provider.providerId }, { $set: { defaultClaimedAt: now } });
+      return { ...provider, defaultClaimedAt: now };
+    }
+    return provider;
+  }
+
+  /**
+   * Give the `system` user (internal services) the platform default provider,
+   * unless an operator already set one up for it (init-system-provider.ts).
+   */
+  async ensureSystemPlatformDefaultProvider(): Promise<UserProviderRecord | null> {
+    const own = await this.db
+      .collection<UserProviderRecord>('user_providers')
+      .findOne({ userId: SYSTEM_USER_ID, managedBy: { $ne: PLATFORM_DEFAULT_MANAGED_BY } });
+    if (own) return null;
+    return this.ensurePlatformDefaultProvider(SYSTEM_USER_ID);
+  }
+
+  /** Disable managed records (the platform default was unconfigured). Returns how many. */
+  async disablePlatformDefaultProviders(): Promise<number> {
+    const result = await this.db.collection<UserProviderRecord>('user_providers').updateMany(
+      { managedBy: PLATFORM_DEFAULT_MANAGED_BY, status: { $ne: 'disabled' } },
+      { $set: { status: 'disabled', isDefault: false, updatedAt: new Date().toISOString() } },
+    );
+    return result.modifiedCount;
+  }
+
+  /**
+   * Provision every default provider a new user gets: the built-in Teros one
+   * and, when configured, the platform default (which then holds the default slot).
+   */
+  async ensureDefaultProviders(userId: string): Promise<void> {
+    await this.ensureDefaultTerosProvider(userId);
+    await this.ensurePlatformDefaultProvider(userId);
+  }
+
+  /**
    * Update provider metadata and optionally secrets
    */
   async updateProvider(
@@ -351,7 +479,12 @@ export class ProviderService {
    * Secrets to build a client with: required ones (null when missing), none
    * for credential-free types, or whatever was stored for optional-key types.
    */
-  async resolveProviderSecrets(provider: Pick<UserProviderRecord, 'userId' | 'providerId' | 'providerType'>): Promise<ProviderSecrets | null> {
+  async resolveProviderSecrets(provider: Pick<UserProviderRecord, 'userId' | 'providerId' | 'providerType' | 'managedBy'>): Promise<ProviderSecrets | null> {
+    if (isPlatformDefaultRecord(provider)) {
+      // The platform holds the key; null (provider skipped) once it is unconfigured.
+      const platform = this.readPlatformDefault();
+      return platform ? { apiKey: platform.apiKey } : null;
+    }
     const type = provider.providerType as ProviderType;
     if (PROVIDER_TYPES_WITH_OPTIONAL_SECRETS.includes(type)) {
       return (await this.getProviderSecrets(provider.userId, provider.providerId)) ?? {};
@@ -400,12 +533,13 @@ export class ProviderService {
       return { ok: false, error: 'No secrets configured for this provider' };
     }
 
-    // Discover candidate models (static probe or live API for Ollama)
-    const discoveredModels = await this.discoverModels(
-      provider.providerType,
-      secretsData || {},
-      provider.config,
-    );
+    // Discover candidate models (static probe or live API for Ollama). The
+    // platform default's models are the configured ones: its endpoint's
+    // /models also lists embedding, TTS and image models.
+    const platform = isPlatformDefaultRecord(provider) ? this.readPlatformDefault() : null;
+    const discoveredModels = platform
+      ? platform.models
+      : await this.discoverModels(provider.providerType, secretsData || {}, provider.config);
 
     // Try to instantiate a client for the first discovered model to validate credentials
     if (discoveredModels.length === 0) {
@@ -908,7 +1042,17 @@ export class ProviderService {
         .collection<UserProviderRecord>('user_providers')
         .findOne({ userId, status: 'active' }, { sort: { priority: 1 } });
 
-      if (!firstProvider) return null;
+      if (!firstProvider) {
+        // A user created outside `createUser` (seed scripts, raw inserts) before
+        // the next boot sync reached them: provision the platform default now.
+        const platformDefault = await this.ensurePlatformDefaultProvider(userId);
+        if (!platformDefault) return null;
+        console.log(
+          `[ProviderService] User ${userId} had no provider; provisioned the platform default ` +
+            `${platformDefault.providerId} for agent ${agentId}`,
+        );
+        return this.resolveModelFromProviders([platformDefault], undefined, requiredCaps);
+      }
 
       // Billing gate: skip teros provider for Basic users
       if (!terosAllowed && firstProvider.providerType === 'teros') {

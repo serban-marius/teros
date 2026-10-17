@@ -97,6 +97,53 @@ export interface TogetherSecret {
   apiKey: string
 }
 
+/**
+ * Platform default LLM provider (`.secrets/system/default-provider.json`).
+ *
+ * An operator-run OpenAI-compatible upstream (e.g. NaN Builders, vLLM, LiteLLM)
+ * that every user gets by default, credential-free for them: the platform holds
+ * the key. Each user receives a managed `openai-compatible` provider record that
+ * points here; the key is resolved from this secret at call time, never copied
+ * into the user's record. Absent ⇒ the built-in `teros` provider stays the
+ * default (unchanged behaviour). See `services/platform-default-provider.ts`.
+ */
+export interface DefaultProviderSecret {
+  /** Name shown to users (provider list, chat header), e.g. "NaN Builders". */
+  displayName: string
+  /** OpenAI-compatible base URL, e.g. "https://api.nan.builders/v1". */
+  baseUrl: string
+  /** Bearer key for the upstream. Optional for endpoints without auth. */
+  apiKey?: string
+  /** Upstream model name agents use when none is chosen, e.g. "qwen3.6". */
+  defaultModel: string
+  /**
+   * Chat models offered to users (upstream names, or objects with capabilities).
+   * Defaults to just `defaultModel`. Not discovered live: the upstream's
+   * /models also lists embedding/TTS/image models, and has no capability data.
+   */
+  models?: Array<string | DefaultProviderModelSecret>
+  /** Model for internal services (channel naming, agent profiles). Defaults to `defaultModel`. */
+  systemModel?: string
+  /**
+   * Extra request-body fields for internal-service calls only, e.g.
+   * `{ "chat_template_kwargs": { "enable_thinking": false } }` so a reasoning
+   * model answers within the few tokens those tasks allow.
+   */
+  systemExtraBody?: Record<string, unknown>
+  /** Extra headers sent with every request (e.g. Cloudflare Access). */
+  customHeaders?: Record<string, string>
+}
+
+export interface DefaultProviderModelSecret {
+  /** Upstream model name. */
+  id: string
+  tools?: boolean
+  vision?: boolean
+  thinking?: boolean
+  contextTokens?: number
+  maxOutputTokens?: number
+}
+
 export interface StripeSecret {
   /** Stripe secret API key (sk_live_… / sk_test_…). */
   secretKey: string
@@ -144,6 +191,7 @@ export interface SystemSecretsRegistry {
   fireworks: FireworksSecret
   together: TogetherSecret
   stripe: StripeSecret
+  "default-provider": DefaultProviderSecret
 }
 
 // Registry of MCA secrets (for type-safety)

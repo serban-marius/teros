@@ -659,3 +659,45 @@ describe("OpenAICompatibleLLMAdapter — tool-result images (screenshots)", () =
     expect(out.map((m) => m.role)).toEqual(["user", "assistant", "tool"])
   })
 })
+
+describe("OpenAICompatibleLLMAdapter — extraBody", () => {
+  function captureRequest(adapter: OpenAICompatibleLLMAdapter): () => any {
+    let capturedReq: any
+    ;(adapter as any).client.chat.completions.create = (req: any) => {
+      capturedReq = req
+      return {
+        withResponse: async () => ({
+          data: streamOf([{ id: "c1", choices: [{ delta: {}, finish_reason: "stop" }], usage: null }]),
+          response: { headers: new Headers() },
+          request_id: "req_test",
+        }),
+      }
+    }
+    return () => capturedReq
+  }
+
+  it("merges extraBody into the request, without letting it override the adapter's own fields", async () => {
+    const adapter = new OpenAICompatibleLLMAdapter({
+      baseUrl: "http://localhost:1234/v1",
+      model: "qwen3.6",
+      extraBody: { chat_template_kwargs: { enable_thinking: false }, model: "hijacked", stream: false },
+    })
+    const req = captureRequest(adapter)
+
+    await adapter.streamMessage({ messages: [userMessage("hi")], maxTokens: 30, callbacks: {} })
+
+    expect(req().chat_template_kwargs).toEqual({ enable_thinking: false })
+    expect(req().model).toBe("qwen3.6")
+    expect(req().stream).toBe(true)
+    expect(req().max_tokens).toBe(30)
+  })
+
+  it("sends no extra fields when extraBody is not configured", async () => {
+    const adapter = makeAdapter()
+    const req = captureRequest(adapter)
+
+    await adapter.streamMessage({ messages: [userMessage("hi")], callbacks: {} })
+
+    expect(req().chat_template_kwargs).toBeUndefined()
+  })
+})
