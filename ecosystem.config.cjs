@@ -58,6 +58,9 @@ module.exports = {
       args: "expo start --web --port 10002",
       cwd: "./packages/app",
       instances: 1,
+      // fork, not pm2's default cluster mode: in cluster mode the npx/expo
+      // output never reaches the log files below.
+      exec_mode: "fork",
       autorestart: true,
       watch: false,
       max_memory_restart: "1G",
