@@ -48,6 +48,8 @@ cp mcas/mca.teros.perplexity/credentials.example.json mcas/mca.teros.perplexity/
 │   ├── anthropic.json          # Anthropic API key
 │   ├── openai.json             # OpenAI API key
 │   ├── database.json           # MongoDB connection
+│   ├── default-provider.json   # Optional: platform default LLM provider for every user
+│   │                           #   (OpenAI-compatible; see default-provider.example.json)
 │   └── auth.json               # Session secrets
 │
 └── mcas/                        # MCA-specific secrets

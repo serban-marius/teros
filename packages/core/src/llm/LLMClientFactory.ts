@@ -97,6 +97,7 @@ export interface LLMConfig {
     apiKey?: string // Optional Bearer token
     customHeaders?: Record<string, string> // Optional custom headers (e.g., CF Access)
     maxTokens?: number
+    extraBody?: Record<string, unknown> // Extra request-body fields (e.g. disable thinking)
   }
   minimax?: {
     apiKey: string // MiniMax Token Plan API key
@@ -595,6 +596,7 @@ export class LLMClientFactory {
           apiKey: config['openai-compatible'].apiKey,
           customHeaders: config['openai-compatible'].customHeaders,
           defaultMaxTokens: config['openai-compatible'].maxTokens,
+          extraBody: config['openai-compatible'].extraBody,
         })
       }
 

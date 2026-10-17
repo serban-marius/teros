@@ -51,6 +51,7 @@ import { createHttpHandler } from './http-server'
 import { registerDependencies } from './container-setup'
 import { notifyProcessManagerReady } from './process-manager'
 import { type BackfillMarker, runCoreAppsBackfillOnce } from './core-apps-backfill'
+import { syncPlatformDefaultProviders } from '../services/platform-default-provider'
 import { AgentUsageSentryAlerts } from '../services/agent-usage-sentry-alerts'
 import { ComputerViewService } from '../services/computer-view-service'
 import { createMetricsRoute } from '../routes/metrics-routes'
@@ -849,6 +850,26 @@ export async function bootstrapServer({
     console.error('❌ Backfill agent-core-apps failed (will retry next boot):', err),
   )
   console.log('🔄 Backfill agent-core-apps scheduled (background, one-time)')
+
+  // -------------------------------------------------------------------------
+  // PLATFORM DEFAULT PROVIDER SYNC (background, every boot)
+  // Gives every user (and the internal-services `system` user) the operator's
+  // default provider from `.secrets/system/default-provider.json`, or disables
+  // the managed records when it is no longer configured. Idempotent; the
+  // resolver provisions lazily for any user it has not reached yet.
+  // -------------------------------------------------------------------------
+
+  void syncPlatformDefaultProviders(db, providerService)
+    .then(({ provisioned, failed, disabled }) => {
+      const platform = providerService.getPlatformDefaultProvider()
+      console.log(
+        platform
+          ? `✅ Platform default provider '${platform.displayName}' (${platform.baseUrl}, ` +
+              `model ${platform.defaultModelId}) synced for ${provisioned} user(s), ${failed} failed`
+          : `ℹ️  No platform default provider configured (${disabled} managed record(s) disabled)`,
+      )
+    })
+    .catch((err) => console.error('❌ Platform default provider sync failed:', err))
 
   // -------------------------------------------------------------------------
   // RESUME SERVICE

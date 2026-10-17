@@ -140,17 +140,18 @@ export class UserService {
       // Don't fail user creation if subscription creation fails
     }
 
-    // Provision the default Teros provider so the user's agent has a model to
-    // run on. Onboarding no longer asks users to connect a provider, so without
-    // this a new user has zero providers and their agent fails to resolve an LLM
-    // ("No AI provider is configured"). Teros is credential-free → no network.
+    // Provision the default providers (Teros, plus the platform default when
+    // the operator configured one) so the user's agent has a model to run on.
+    // Onboarding no longer asks users to connect a provider, so without this a
+    // new user has zero providers and their agent fails to resolve an LLM
+    // ("No AI provider is configured"). Both are credential-free → no network.
     if (this.providerService) {
       try {
-        await this.providerService.ensureDefaultTerosProvider(user.userId);
-        console.log(`[UserService] Provisioned default Teros provider for new user ${user.userId}`);
+        await this.providerService.ensureDefaultProviders(user.userId);
+        console.log(`[UserService] Provisioned default providers for new user ${user.userId}`);
       } catch (error) {
         console.error(
-          `[UserService] Failed to provision default Teros provider for user ${user.userId}:`,
+          `[UserService] Failed to provision default providers for user ${user.userId}:`,
           error,
         );
         // Don't fail user creation if provider provisioning fails — the backfill

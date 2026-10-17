@@ -475,6 +475,11 @@ export class ChannelManager {
         } as any);
         if (userProvider) {
           providerName = userProvider.displayName;
+          if (!model) {
+            modelString =
+              userProvider.models?.find((m: any) => m.modelId === agent.selectedModelId)
+                ?.modelString ?? modelString;
+          }
         }
       }
     } else {
@@ -501,7 +506,11 @@ export class ChannelManager {
               modelString = model.modelString;
               modelName = (model.name || '').replace(/\s*\([^)]+\)\s*$/, '').trim() || model.name;
             } else {
-              modelString = resolvedModelId;
+              // Live-discovered models (openai-compatible, ollama) are not in the
+              // global catalogue: show the upstream model name, not the internal id.
+              modelString =
+                defaultProvider.models?.find((m: any) => m.modelId === resolvedModelId)?.modelString ??
+                resolvedModelId;
             }
           }
         }

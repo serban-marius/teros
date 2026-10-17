@@ -2,7 +2,7 @@
  * agent.generate-profile — Generate a unique agent profile using LLM
  */
 
-import { LLMClientFactory } from '@teros/core'
+import { createSystemLLMClient } from '../../../services/internal-llm-service'
 import { HandlerError } from '../../../ws-framework/WsRouter'
 import type { WsHandlerContext } from '@teros/shared'
 import type { Collection, Db } from 'mongodb'
@@ -39,8 +39,6 @@ interface GeneratedProfile {
   intro: string
   responseStyle: string
 }
-
-const SYSTEM_USER_ID = 'system'
 
 function buildGenerationPrompt(core: AgentCore, excludeNames: string[]): string {
   const excludeList =
@@ -131,39 +129,17 @@ export function createGenerateProfileHandler(db: Db, providerService: ProviderSe
     const allExcludedNames = [...new Set([...excludeNames, ...existingNames])]
 
     try {
-      const providers = await providerService.listUserProviders(SYSTEM_USER_ID)
-      if (providers.length === 0) {
-        throw new Error('No provider configured for system user. Run: npm run init:system-provider')
-      }
-
-      const provider = providers.find((p) => p.status === 'active') || providers[0]
-      const preferredModel = provider.models.find((m) => m.modelId.includes('sonnet'))
-      const modelToUse = preferredModel || provider.models[0]
-
-      if (!modelToUse) {
-        throw new Error('No models available in system provider')
-      }
-
-      const secrets = await providerService.getProviderSecrets(SYSTEM_USER_ID, provider.providerId)
-      if (!secrets || !secrets.apiKey) {
-        throw new Error(`Failed to decrypt secrets for provider ${provider.providerId}`)
-      }
+      const { client: llmClient, model: modelToUse, provider } = await createSystemLLMClient(
+        providerService,
+        {
+          maxTokens: 1024,
+          preferModel: (models) => models.find((m) => m.modelId.includes('sonnet')),
+        },
+      )
 
       console.log(
         `[agent.generate-profile] Generating profile using ${modelToUse.modelId} (${provider.providerType})`,
       )
-
-      const llmClient = await LLMClientFactory.create({
-        provider: provider.providerType as any,
-        anthropic:
-          provider.providerType === 'anthropic'
-            ? { apiKey: secrets.apiKey, model: modelToUse.modelString, maxTokens: 1024 }
-            : undefined,
-        openai:
-          provider.providerType === 'openai'
-            ? { apiKey: secrets.apiKey, model: modelToUse.modelString, maxTokens: 1024 }
-            : undefined,
-      })
 
       const prompt = buildGenerationPrompt(core, allExcludedNames)
 
