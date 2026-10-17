@@ -184,25 +184,31 @@ describeIf("computer runtime image (smoke)", () => {
   }, 120_000)
 
   it("brings the browser back when it is closed or killed, still logged in", async () => {
+    const health = async () => (await tool("-health-check")).output
+    const until = async (ok: (s: string) => boolean, ms: number) => {
+      const deadline = Date.now() + ms
+      let s = await health()
+      while (!ok(s) && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 100))
+        s = await health()
+      }
+      return s
+    }
+    const up = (s: string) => s.includes("browser running")
+
     // A person clicking the window's X: Chromium's own close button, top right.
     docker("exec", "-u", "teros", NAME, "xdotool", "mousemove", "1260", "20", "click", "1")
-    const down = Date.now()
-    let state = ""
-    while (Date.now() - down < 15_000) {
-      state = (await tool("-health-check")).output
-      if (state.includes("browser running") && !state.includes("restarting")) break
-      await new Promise((r) => setTimeout(r, 250))
-    }
-    expect(state).toContain("browser running")
+    expect(up(await until((s) => !up(s), 5_000))).toBe(false)
+    expect(await until(up, 15_000)).toContain("browser running")
     expect((await tool("get-state", { maxChars: 500 })).output).toContain("Browser: http")
 
     // A crash or OOM kill of the browser process: back without any tool call.
-    docker("exec", NAME, "pkill", "-KILL", "-o", "-x", "chromium")
-    await new Promise((r) => setTimeout(r, 4_000))
-    expect((await tool("-health-check")).output).toContain("browser running")
+    expect(docker("exec", NAME, "pkill", "-KILL", "-o", "-x", "chromium").status).toBe(0)
+    expect(up(await until((s) => !up(s), 5_000))).toBe(false)
+    expect(await until(up, 20_000)).toContain("browser running")
     const page = await tool("open-url", { url: "http://127.0.0.1:8099/whoami" })
     expect(page.output).toContain("cookie:smoke=yes")
-  }, 60_000)
+  }, 90_000)
 
   it("rejects viewer routes without the backend token", async () => {
     expect((await fetch(`http://127.0.0.1:${PORT}/viewer/control`)).status).toBe(401)
