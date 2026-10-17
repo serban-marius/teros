@@ -1,6 +1,7 @@
 import type { WsHandlerContext } from "@teros/shared"
 import { canAccessWorkspace } from "../../../auth/workspace-access"
 import { COMPUTER_MCA_ID } from "../../../services/computer-view-service"
+import type { App } from "../../../types/database"
 import { HandlerError } from "../../../ws-framework/WsRouter"
 import type { ComputerDomainDeps } from "./index"
 
@@ -9,8 +10,28 @@ interface OpenComputerData {
   agentId?: string
   /** Or open a specific computer app (e.g. from a tool-call card). */
   appId?: string
+  /**
+   * Or by app name within workspaceId: tool-call messages carry the tool name
+   * (`<appName>_<tool>`) but not the appId.
+   */
+  appName?: string
   /** Active workspace, required for superagents (they have no workspace of their own). */
   workspaceId?: string
+}
+
+/** A computer app by id, or by name within the given workspace. */
+async function findComputerApp(
+  deps: ComputerDomainDeps,
+  data: OpenComputerData,
+): Promise<App | null> {
+  const app = data.appId
+    ? await deps.mcaService.getApp(data.appId)
+    : data.appName && data.workspaceId
+      ? await deps.db
+          .collection<App>("apps")
+          .findOne({ name: data.appName, ownerId: data.workspaceId, mcaId: COMPUTER_MCA_ID })
+      : null
+  return app?.mcaId === COMPUTER_MCA_ID ? app : null
 }
 
 export function createOpenComputerHandler(deps: ComputerDomainDeps) {
@@ -22,10 +43,10 @@ export function createOpenComputerHandler(deps: ComputerDomainDeps) {
     let appName: string
     let agentId: string | undefined = data.agentId
 
-    if (data.appId) {
-      const app = await mcaService.getApp(data.appId)
-      if (!app || app.mcaId !== COMPUTER_MCA_ID) {
-        throw new HandlerError("COMPUTER_NOT_FOUND", `No computer ${data.appId}`)
+    if (data.appId || data.appName) {
+      const app = await findComputerApp(deps, data)
+      if (!app) {
+        throw new HandlerError("COMPUTER_NOT_FOUND", `No computer ${data.appId ?? data.appName}`)
       }
       if (!(await canAccessWorkspace(db, ctx.userId, app.ownerId))) {
         throw new HandlerError("FORBIDDEN_WORKSPACE", `No access to workspace ${app.ownerId}`)

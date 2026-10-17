@@ -1315,6 +1315,10 @@ export class McaService {
         name,
         status: 'active',
         forAgentId: agentId,
+        // The agent's own tool loop (e.g. a computer: every step is a call):
+        // keep it out of the execution proxy so each action isn't a
+        // discovery round trip, and tool names match the MCA's guide.
+        toolExposure: 'direct',
       });
       console.log(`[McaService] Created per-agent app ${app.appId} (${name}) of ${mcaId} for agent ${agentId}`);
     } else if (app.status !== 'active') {

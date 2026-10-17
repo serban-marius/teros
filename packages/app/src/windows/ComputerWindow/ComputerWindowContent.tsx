@@ -41,7 +41,7 @@ export function parseViewerMessage(data: unknown): { holder?: Holder; expired?: 
   return null
 }
 
-export function ComputerWindowContent({ agentId, appId, workspaceId, agentName }: Props) {
+export function ComputerWindowContent({ agentId, appId, appName, workspaceId, agentName }: Props) {
   const { t } = useTranslation()
   const c = useColors()
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
@@ -55,13 +55,14 @@ export function ComputerWindowContent({ agentId, appId, workspaceId, agentName }
       const res = await getTerosClient().computer.open({
         agentId,
         appId,
+        appName,
         workspaceId: workspaceId ?? activeWorkspaceId ?? undefined,
       })
       setState({ status: "ready", viewUrl: res.viewUrl, appName: res.appName })
     } catch (error) {
       setState({ status: "error", message: (error as Error)?.message ?? String(error) })
     }
-  }, [agentId, appId, workspaceId, activeWorkspaceId])
+  }, [agentId, appId, appName, workspaceId, activeWorkspaceId])
 
   useEffect(() => {
     void open()

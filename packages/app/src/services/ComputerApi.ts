@@ -25,6 +25,8 @@ export class ComputerApi {
   open(target: {
     agentId?: string
     appId?: string
+    /** Computer app name within workspaceId (from a tool name `<appName>_<tool>`). */
+    appName?: string
     workspaceId?: string
   }): Promise<OpenComputerResult> {
     return this.transport.request<OpenComputerResult>("computer.open", target)

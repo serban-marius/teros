@@ -61,15 +61,20 @@ function ComputerToolCallRendererBase(props: ToolCallRendererProps) {
   const c = useColors()
   const openWindow = useTilingStore((s) => s.openWindow)
 
+  // Tool messages carry `<appName>_<tool>` but not always the appId; app names
+  // can't contain "_", so the prefix is the computer's app name.
+  const appName = toolName.includes("_") ? toolName.slice(0, toolName.indexOf("_")) : undefined
+  const target = appId ? { appId } : appName ? { appName } : null
+
   // In the header (badge slot) so it's reachable without expanding the card.
-  const openButton = appId ? (
+  const openButton = target ? (
     <Button
       size="$1"
       chromeless
       icon={<MonitorPlay size={12} color={c.text2} />}
       onPress={(e: { stopPropagation?: () => void }) => {
         e?.stopPropagation?.()
-        openWindow("computer", { appId }, true)
+        openWindow("computer", target, true)
       }}
     >
       <Text fontSize={11} color={c.text2}>

@@ -16,6 +16,8 @@ export interface ComputerWindowProps {
   agentId?: string
   /** Or a specific computer app (e.g. from a tool-call card). */
   appId?: string
+  /** Or a computer app by name in the active workspace (tool-call cards only know the tool name). */
+  appName?: string
   /** Active workspace (needed for superagents). */
   workspaceId?: string
   /** Agent name for the title, when known. */
@@ -33,7 +35,7 @@ export const computerWindowDefinition: WindowTypeDefinition<ComputerWindowProps>
   defaultSize: { width: 1280, height: 860 },
   minSize: { width: 640, height: 420 },
 
-  getKey: (props) => props.appId ?? props.agentId ?? "computer",
+  getKey: (props) => props.appId ?? props.appName ?? props.agentId ?? "computer",
 
   getTitle: (props) =>
     props.agentName
@@ -45,6 +47,7 @@ export const computerWindowDefinition: WindowTypeDefinition<ComputerWindowProps>
   serialize: (props) => ({
     agentId: props.agentId,
     appId: props.appId,
+    appName: props.appName,
     workspaceId: props.workspaceId,
     agentName: props.agentName,
   }),
@@ -52,6 +55,7 @@ export const computerWindowDefinition: WindowTypeDefinition<ComputerWindowProps>
   deserialize: (data) => ({
     agentId: data.agentId as string | undefined,
     appId: data.appId as string | undefined,
+    appName: data.appName as string | undefined,
     workspaceId: data.workspaceId as string | undefined,
     agentName: data.agentName as string | undefined,
   }),

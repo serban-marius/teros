@@ -50,9 +50,17 @@ describe("ComputerToolCallRenderer", () => {
     expect(openWindow).toHaveBeenCalledWith("computer", { appId: "app_123" }, true)
   })
 
-  it("has no live-view action without an appId", () => {
-    const { queryByText } = renderWithTamagui(
+  it("falls back to the app name from the tool name (stored tool messages have no appId)", () => {
+    const { getByText } = renderWithTamagui(
       <ComputerToolCallRenderer toolCallId="tc2" toolName="computer-ana_scroll" status="running" />,
+    )
+    fireEvent.click(getByText("computer.openLiveView"))
+    expect(openWindow).toHaveBeenCalledWith("computer", { appName: "computer-ana" }, true)
+  })
+
+  it("has no live-view action when the computer can't be identified", () => {
+    const { queryByText } = renderWithTamagui(
+      <ComputerToolCallRenderer toolCallId="tc3" toolName="scroll" status="running" />,
     )
     expect(queryByText("computer.openLiveView")).toBeNull()
   })

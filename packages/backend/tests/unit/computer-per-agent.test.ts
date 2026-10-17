@@ -83,6 +83,7 @@ describe("ensurePerAgentApp", () => {
       ownerId: WS,
       forAgentId: "agent_a",
       name: "computer-alice-bot",
+      toolExposure: "direct",
     })
     const grants = await db.collection("agent_app_access").find({ appId: app.appId }).toArray()
     expect(grants.map((g) => g.agentId)).toEqual(["agent_a"])
@@ -169,6 +170,21 @@ describe("computer.open", () => {
       workspaceId: WS,
     })
     expect(res.agentId).toBe("agent_super")
+  })
+
+  it("opens a computer by app name in a workspace (tool cards carry the tool name, not the appId)", async () => {
+    await seedAgent("agent_a", "Alice")
+    const app = await mcaService.ensurePerAgentApp("agent_a", MCA, WS)
+    const res = await open()({ userId: OWNER } as never, { appName: app.name, workspaceId: WS })
+    expect(res.appId).toBe(app.appId)
+    await expect(
+      open()({ userId: "user_stranger" } as never, { appName: app.name, workspaceId: WS }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN_WORKSPACE" })
+    await expect(
+      open()({ userId: OWNER } as never, { appName: "nope", workspaceId: WS }),
+    ).rejects.toMatchObject({
+      code: "COMPUTER_NOT_FOUND",
+    })
   })
 
   it("opens an existing computer by appId and rejects other apps", async () => {
