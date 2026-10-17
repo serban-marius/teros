@@ -61,6 +61,8 @@ import { register as registerSkillDomain } from "./domains/skill"
 import { register as registerProjectDomain } from "./domains/project"
 import { register as registerDesktopStateDomain } from "./domains/desktop-state"
 import { register as registerTerminalDomain } from "./domains/terminal"
+import { register as registerComputerDomain } from "./domains/computer"
+import { config } from "../config"
 import { register as registerFeatureFlagDomain } from "./domains/feature-flag"
 import { register as registerSubscriptionsDomain } from "./domains/subscriptions"
 import type { AgentWakeUpCallback, EventHandler } from "./event-handler"
@@ -69,6 +71,7 @@ import type { PubSubService } from "../services/pubsub-service"
 import type { MCAEventSubscriptionService } from "../services/mca-event-subscription-service"
 import type { LatitudeScoreEmitter } from "../services/latitude-score-emitter"
 import type { PtyManager } from "../services/pty-manager"
+import type { ComputerViewService } from "../services/computer-view-service"
 
 const log = createLogger('WebSocketHandler')
 
@@ -92,6 +95,8 @@ export interface WebSocketHandlerOptions {
   pubSubService?: PubSubService | null
   mcaEventSubscriptionService?: MCAEventSubscriptionService | null
   ptyManager?: PtyManager | null
+  /** Agent computers' live view (computer.open). Null when MCAs are not wired. */
+  computerViewService?: ComputerViewService | null
   /** F4·C0 — Latitude score emitter for the 👎 feedback hook. Null when not wired. */
   latitudeScoreEmitter?: LatitudeScoreEmitter | null
 
@@ -377,6 +382,18 @@ export class WebSocketHandler {
 
     // scheduler domain: scheduler.* — paths paralelos al MCA mca.teros.scheduler (criterio 22)
     registerSchedulerDomain(this.wsRouter, { db })
+
+    // computer domain: an agent's own desktop (mca.teros.computer) — live view tickets
+    if (options?.computerViewService && options?.mcaManager) {
+      const mcaManager = options.mcaManager
+      registerComputerDomain(this.wsRouter, {
+        db,
+        mcaService: this.mcaService,
+        computerViewService: options.computerViewService,
+        warmUp: (appId) => mcaManager.getOrSpawn(appId),
+        publicBaseUrl: config.static.baseUrl.replace(/\/static\/?$/, ''),
+      })
+    }
 
     // terminal domain: PTY-based interactive terminal
     registerTerminalDomain(this.wsRouter, {

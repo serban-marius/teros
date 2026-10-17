@@ -52,6 +52,7 @@ import { registerDependencies } from './container-setup'
 import { notifyProcessManagerReady } from './process-manager'
 import { type BackfillMarker, runCoreAppsBackfillOnce } from './core-apps-backfill'
 import { AgentUsageSentryAlerts } from '../services/agent-usage-sentry-alerts'
+import { ComputerViewService } from '../services/computer-view-service'
 import { createMetricsRoute } from '../routes/metrics-routes'
 import { ensureBillingIndexes, seedBillingPlans, seedDefaultTerosProviderConfig } from '../models/billing'
 
@@ -389,6 +390,13 @@ export async function bootstrapServer({
     ? new RateLimiter(db, createLogger('RateLimiter'))
     : null
 
+  // Agent computers (mca.teros.computer): live view + take-over proxy. Tickets
+  // are signed with a key derived from the session secret, so they survive
+  // restarts and validate on any backend instance.
+  const computerViewService = mcaManager
+    ? new ComputerViewService(mcaManager, secretsManager.system('auth')?.sessionTokenSecret)
+    : null
+
   const httpHandler = createHttpHandler({
     adminRoutes,
     boardRoutes,
@@ -410,6 +418,7 @@ export async function bootstrapServer({
     mcaEventSubscriptionService,
     sessionManager,
     mcaManager,
+    computerViewService,
     rateLimiter: rateLimiter ?? undefined,
     db,
   })
@@ -438,6 +447,7 @@ export async function bootstrapServer({
     mcaEventSubscriptionService,
     boardSubscriptionService,
     ptyManager,
+    computerViewService,
     userService,
     identityService,
     sessionService,
@@ -671,6 +681,11 @@ export async function bootstrapServer({
       })()
     } else if (pathname === '/mca' && mcaConnectionManager) {
       mcaConnectionManager.handleUpgrade(request, socket, head)
+    } else if (
+      pathname.startsWith('/computer/') &&
+      computerViewService?.handleUpgrade(request, socket, head)
+    ) {
+      // handled: agent computer live view (RFB over WebSocket)
     } else {
       console.warn(`[WebSocket] Unknown upgrade path: ${pathname}`)
       socket.destroy()

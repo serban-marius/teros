@@ -118,11 +118,14 @@ export {
 } from './health';
 // HTTP server (HTTP transport)
 export {
+  type HttpRouteHandler,
   type HttpServerConfig,
+  isBackendAuthorized,
   McaHttpServer,
   type McaHttpServerConfig,
   type ToolConfig as HttpToolConfig,
   type ToolContext as HttpToolContext,
+  type WsRouteHandler,
 } from './http-server';
 // Main server class (wrapper that auto-detects transport)
 export {

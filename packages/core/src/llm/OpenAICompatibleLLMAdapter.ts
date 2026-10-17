@@ -34,6 +34,9 @@ import { isContextLengthExceeded } from "./context-length-error"
 import { ImagePipeline, type ProcessedImage } from "./ImagePipeline"
 import { decInflight, incInflight } from "./inflight-gauge"
 import { populateRateLimitContext } from "./rate-limit-context"
+
+/** Tool-result images (screenshots) kept in context; older ones are dropped. */
+const MAX_TOOL_RESULT_IMAGES = 2
 import { extractReasoningDelta } from "./reasoningDelta"
 import { uncachedInputTokens } from "./usage-normalize"
 
@@ -418,6 +421,65 @@ export class OpenAICompatibleLLMAdapter implements ILLMClient {
   }
 
   /**
+   * Process the image attachments of the most recent completed tool results
+   * (newest first, at most MAX_TOOL_RESULT_IMAGES). Keyed by tool call id.
+   * Empty when the model has no vision.
+   */
+  private async processToolResultImages(
+    messages: MessageWithParts[],
+  ): Promise<Map<string, ProcessedImage[]>> {
+    const byCall = new Map<string, ProcessedImage[]>()
+    if (!this.imagePipeline.supportsVision(this.defaultModel)) return byCall
+    type FilePart = import("../session/types").FilePart
+    // Newest first: walk the completed tool parts backwards.
+    const toolParts = messages
+      .flatMap((m) => m.parts)
+      .filter((p) => p.type === "tool" && p.state.status === "completed")
+      .reverse()
+    const picked = toolParts
+      .flatMap((part) => {
+        const files = (part as { state: { attachments?: FilePart[] } }).state.attachments ?? []
+        const callID = (part as { callID: string }).callID
+        return files
+          .filter((f) => f.type === "file" && f.mime?.startsWith("image/"))
+          .map((file) => ({ callID, file }))
+      })
+      .slice(0, MAX_TOOL_RESULT_IMAGES)
+    if (picked.length === 0) return byCall
+    try {
+      const processed = await this.imagePipeline.processImages(
+        picked.map((p) => p.file),
+        "openai",
+      )
+      for (const { callID, file } of picked) {
+        const img = processed.get(file.url)
+        if (img) byCall.set(callID, [...(byCall.get(callID) ?? []), img])
+      }
+    } catch (error) {
+      log.error("OpenAICompatibleLLM", "Failed to process tool result images", undefined, {
+        reason: (error as Error).message,
+      })
+    }
+    return byCall
+  }
+
+  private pushToolResultImages(
+    out: OpenAI.ChatCompletionMessageParam[],
+    results: { tool_call_id: string }[],
+    images: Map<string, ProcessedImage[]>,
+  ): void {
+    const content: OpenAI.ChatCompletionContentPart[] = []
+    for (const r of results) {
+      for (const img of images.get(r.tool_call_id) ?? []) {
+        content.push({ type: "image_url", image_url: { url: `data:${img.mimeType};base64,${img.base64}` } })
+      }
+    }
+    if (content.length > 0) {
+      out.push({ role: "user", content: [{ type: "text", text: "Images returned by the tool call(s) above:" }, ...content] })
+    }
+  }
+
+  /**
    * Convert MessageWithParts[] to OpenAI messages format
    */
   private async convertMessages(
@@ -429,6 +491,12 @@ export class OpenAICompatibleLLMAdapter implements ILLMClient {
     if (systemPrompt) {
       openaiMessages.push({ role: "system", content: systemPrompt })
     }
+
+    // Images attached to tool results (e.g. computer/browser screenshots).
+    // Chat Completions can't put images in a `tool` message, so they follow as a
+    // user message. Only the most recent ones are sent: in a long screen-driven
+    // loop each older screenshot is stale and would be re-paid on every turn.
+    const toolResultImages = await this.processToolResultImages(messages)
 
     for (const msg of messages) {
       const role = msg.info.role === "user" ? "user" : "assistant"
@@ -551,6 +619,7 @@ export class OpenAICompatibleLLMAdapter implements ILLMClient {
               content: result.content,
             })
           }
+          this.pushToolResultImages(openaiMessages, toolResults, toolResultImages)
         } else if (textParts.length > 0) {
           openaiMessages.push({ role: "assistant", content: textParts.join("\n") })
         }
@@ -565,6 +634,7 @@ export class OpenAICompatibleLLMAdapter implements ILLMClient {
               content: result.content,
             })
           }
+          this.pushToolResultImages(openaiMessages, toolResults, toolResultImages)
         }
 
         // Build content array with text and images

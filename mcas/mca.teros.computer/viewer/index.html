@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Computer</title>
+  <link rel="stylesheet" href="viewer.css" />
+</head>
+<body>
+  <header id="bar">
+    <span id="status" class="pill pill-wait">Connecting…</span>
+    <span id="hint"></span>
+    <span class="spacer"></span>
+    <button id="take" type="button" hidden>Take over</button>
+    <button id="release" type="button" class="primary" hidden>Hand back to agent</button>
+  </header>
+  <main id="screen"></main>
+  <div id="overlay" hidden></div>
+  <script type="module" src="viewer.js"></script>
+</body>
+</html>

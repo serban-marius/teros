@@ -98,6 +98,10 @@ log_step "Building Bash MCA runtime Docker image..."
 docker build -t teros/mca-runtime-bash:latest -f docker/mca-runtime-bash/Dockerfile .
 log_info "Bash MCA runtime image built successfully"
 
+log_step "Building Computer MCA runtime Docker image (agent desktops)..."
+docker build -t teros/mca-runtime-computer:latest -f docker/mca-runtime-computer/Dockerfile .
+log_info "Computer MCA runtime image built successfully"
+
 if [ -n "$WAHA_DOCKER_USERNAME" ] && [ -n "$WAHA_DOCKER_PASSWORD" ]; then
     log_step "Building WhatsApp MCA runtime Docker image..."
     echo "$WAHA_DOCKER_PASSWORD" | docker login -u "$WAHA_DOCKER_USERNAME" --password-stdin

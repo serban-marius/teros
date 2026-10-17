@@ -14,6 +14,7 @@ import {
   Folder,
   MessageSquare,
   Mic,
+  Monitor,
   Package,
   Palette,
   Plus,
@@ -552,6 +553,21 @@ export function AgentWindowContent({ windowId, agentId, workspaceId }: AgentWind
     }, false, windowId);
   };
 
+  // The agent's own Linux computer (live view + take-over); created on first open.
+  const handleOpenComputer = () => {
+    if (!agent) return;
+    const existing = findWindow('computer', (props) => props.agentId === agent.agentId);
+    if (existing) {
+      focusWindow(existing.id);
+      return;
+    }
+    openWindow('computer', {
+      agentId: agent.agentId,
+      agentName: agent.name || agent.fullName,
+      workspaceId: useWorkspaceStore.getState().activeWorkspaceId ?? undefined,
+    }, true, windowId);
+  };
+
   useEffect(() => {
     const loadAgent = async () => {
       if (!agentId) {
@@ -927,6 +943,22 @@ export function AgentWindowContent({ windowId, agentId, workspaceId }: AgentWind
                 >
                   <Text color="white" fontSize={13} fontWeight="600">
                     {t("agent.voice")}
+                  </Text>
+                </Button>
+
+                <Button
+                  size="$3"
+                  backgroundColor={c.borderStrong}
+                  paddingHorizontal={16}
+                  paddingVertical={8}
+                  borderRadius={6}
+                  icon={<Monitor size={16} color={c.text} />}
+                  onPress={handleOpenComputer}
+                  hoverStyle={{ opacity: 0.85 }}
+                  pressStyle={{ opacity: 0.7 }}
+                >
+                  <Text color={c.text} fontSize={13} fontWeight="600">
+                    {t("agent.computer")}
                   </Text>
                 </Button>
               </XStack>

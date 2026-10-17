@@ -592,6 +592,20 @@ describe('spawnContainer', () => {
     }
   })
 
+  it('appVolume monta un volumen Docker con nombre privado del app (fuera del workspace)', async () => {
+    const { ctx, getOrStartMock } = makeCtx()
+    await spawnContainer(
+      ctx, APP_ID, makeApp(),
+      makeMca({ runtime: { transport: 'http', containerMode: 'per-app', appVolume: { containerPath: '/home/teros' } } }), 0,
+    )
+    // biome-ignore lint/suspicious/noExplicitAny: shape verificado por asserts
+    expect((getOrStartMock.mock.calls[0][1] as any).volumes).toContainEqual({
+      hostPath: `teros-app-${APP_ID}`,
+      containerPath: '/home/teros',
+      readOnly: false,
+    })
+  })
+
   it('systemVolumes del manifest (p.ej. docker socket) se añaden a los mounts', async () => {
     const { ctx, getOrStartMock } = makeCtx()
     await spawnContainer(

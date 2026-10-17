@@ -490,10 +490,14 @@ export class ModelService {
       );
       for (const { app } of agentApps) {
         const appContext = (app.context ?? '').trim();
-        if (!appContext) continue;
         const appName = app.name || app.mca?.name || 'App';
+        // The MCA's own usage guide (manifest agentInstructions, from the repo)
+        // comes first; `{{app}}` becomes the app name so tool names are exact.
+        const guide = (app.mca?.agentInstructions ?? '').trim().replaceAll('{{app}}', appName);
+        if (!appContext && !guide) continue;
         const mcaId = app.mca?.mcaId ?? '';
-        prompt += `\n\n<app_instructions app="${appName}"${mcaId ? ` mca="${mcaId}"` : ''}>\n${appContext}\n</app_instructions>`;
+        const body = [guide, appContext].filter(Boolean).join('\n\n');
+        prompt += `\n\n<app_instructions app="${appName}"${mcaId ? ` mca="${mcaId}"` : ''}>\n${body}\n</app_instructions>`;
       }
     } catch (err) {
       console.error('[ModelService] Failed to inject app instructions:', err);

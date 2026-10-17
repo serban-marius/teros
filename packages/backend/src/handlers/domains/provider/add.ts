@@ -4,7 +4,11 @@
 
 import type { WsHandlerContext } from "@teros/shared"
 import type { ProviderService } from "../../../services/provider-service"
-import { PROVIDER_TYPES_WITHOUT_SECRETS } from "../../../services/provider-service"
+import {
+  PROVIDER_TYPES_WITH_OPTIONAL_SECRETS,
+  PROVIDER_TYPES_WITHOUT_SECRETS,
+  type ProviderType,
+} from "../../../services/provider-service"
 import { HandlerError } from "../../../ws-framework/WsRouter"
 
 interface AddProviderData {
@@ -59,6 +63,10 @@ export function createAddProviderHandler(providerService: ProviderService) {
 
     // Credential-free providers — test immediately to discover models
     if (PROVIDER_TYPES_WITHOUT_SECRETS.includes(providerType as any)) {
+      // Optional key (e.g. an OpenAI-compatible endpoint behind auth): keep it.
+      if (auth?.apiKey && PROVIDER_TYPES_WITH_OPTIONAL_SECRETS.includes(providerType as ProviderType)) {
+        await providerService.setProviderSecrets(ctx.userId, provider.providerId, { apiKey: auth.apiKey })
+      }
       const testResult = await providerService.testProvider(provider.providerId)
       console.log(`[provider.add] Added credential-free provider ${provider.providerId} (${providerType})`)
       return {

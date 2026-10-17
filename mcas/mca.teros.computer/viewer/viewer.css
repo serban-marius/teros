@@ -1,0 +1,109 @@
+:root {
+  --bg: #0b0d12;
+  --bar: #151923;
+  --text: #e6e8ee;
+  --muted: #9aa3b5;
+  --agent: #6366f1;
+  --human: #f59e0b;
+  --border: #262c3a;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    13px / 1.4 -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+body {
+  display: flex;
+  flex-direction: column;
+}
+#bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--border);
+  flex: none;
+  min-height: 40px;
+}
+.spacer {
+  flex: 1;
+}
+#hint {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pill {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.pill-wait {
+  background: #2a3040;
+  color: var(--muted);
+}
+.pill-agent {
+  background: color-mix(in srgb, var(--agent) 25%, transparent);
+  color: #c7c9ff;
+}
+.pill-human {
+  background: color-mix(in srgb, var(--human) 25%, transparent);
+  color: #ffd58a;
+}
+button {
+  font: inherit;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #222838;
+  color: var(--text);
+  padding: 5px 12px;
+  cursor: pointer;
+}
+button:hover {
+  background: #2b3246;
+}
+button.primary {
+  background: var(--human);
+  border-color: var(--human);
+  color: #1b1300;
+  font-weight: 600;
+}
+#screen {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+[hidden] {
+  display: none !important;
+}
+#screen.view-only canvas {
+  cursor: default !important;
+}
+#overlay {
+  position: absolute;
+  inset: 40px 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 13, 18, 0.85);
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 24px;
+}

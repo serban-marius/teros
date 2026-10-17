@@ -14,8 +14,15 @@
 import { MongoClient } from "mongodb"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
+// Same .env layering as the backend and sync-mcas (they import config too), so
+// MONGODB_DATABASE from .env targets the same database instead of falling back
+// to database.json's.
+import "../config"
 import { MODEL_DEFINITIONS } from "../models/definitions"
 import { secrets } from "../secrets/secrets-manager"
+
+/** Provider types whose model list comes from the endpoint, not MODEL_DEFINITIONS. */
+const LIVE_DISCOVERY_PROVIDER_TYPES = new Set(["ollama", "openai-compatible"])
 
 const __filename_local = fileURLToPath(import.meta.url)
 const __dirname_local = dirname(__filename_local)
@@ -205,6 +212,10 @@ async function syncModels(dryRun: boolean = false) {
       const allUserProviders = await userProvidersCollection.find({}).toArray()
       let providersCleaned = 0
       for (const up of allUserProviders) {
+        // Models of these providers are discovered live from the endpoint
+        // (provider-service discoverModels), never defined statically: they are
+        // not orphans, and pulling them leaves the provider with no models.
+        if (LIVE_DISCOVERY_PROVIDER_TYPES.has(up.providerType)) continue
         const currentModels = up.models || []
         const modelsToRemove = currentModels.filter((m: any) => !allDefinedModelIds.has(m.modelId))
         if (modelsToRemove.length > 0) {

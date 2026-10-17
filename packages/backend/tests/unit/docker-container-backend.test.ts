@@ -16,6 +16,10 @@
 
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test'
 
+// Container names must not depend on a developer's local .env (preload loads it).
+delete process.env.MCA_CONTAINER_PREFIX
+delete process.env.MCA_PORT_RANGE
+
 const execFileSyncMock = mock<(cmd: string, args: string[], opts?: unknown) => string>(() => '')
 const spawnSyncMock = mock<(cmd: string, args: string[], opts?: unknown) => unknown>(() => ({
   status: 0,
@@ -131,6 +135,7 @@ import {
   DockerContainerBackend,
   type DockerContainerBackendConfig,
 } from '../../src/services/docker-container-backend'
+import { parsePortRange } from '../../src/services/docker-backend-factory'
 
 function makeConfig(overrides: Partial<DockerContainerBackendConfig> = {}): DockerContainerBackendConfig {
   return {
@@ -176,6 +181,19 @@ function healthyFetch(): void {
 // ===========================================================================
 // Sanitización
 // ===========================================================================
+
+describe('parsePortRange (MCA_PORT_RANGE)', () => {
+  it.each([
+    [undefined, { min: 13000, max: 13999 }],
+    ['14000-14999', { min: 14000, max: 14999 }],
+    [' 20000-20100 ', { min: 20000, max: 20100 }],
+    ['14999-14000', { min: 13000, max: 13999 }],
+    ['80-90', { min: 13000, max: 13999 }],
+    ['nope', { min: 13000, max: 13999 }],
+  ])('%p → %p', (raw, expected) => {
+    expect(parsePortRange(raw as string | undefined)).toEqual(expected)
+  })
+})
 
 describe('assertSafeContainerName', () => {
   it('acepta nombres docker válidos', () => {
@@ -529,10 +547,11 @@ describe('ensureEgressNetwork (egress network creation)', () => {
 // ===========================================================================
 
 describe('stop', () => {
-  it('hace docker rm -f y traga el error si ya no existe', async () => {
+  it('hace docker stop (SIGTERM con gracia) + rm -f y traga el error si ya no existe', async () => {
     const backend = new DockerContainerBackend(makeConfig())
     await backend.stop('mca-teros-bash')
-    expect(dockerCalls()[0]).toEqual(['rm', '-f', 'mca-teros-bash'])
+    expect(dockerCalls()[0]).toEqual(['stop', '--time', '5', 'mca-teros-bash'])
+    expect(dockerCalls()[1]).toEqual(['rm', '-f', 'mca-teros-bash'])
 
     spawnScript.mockImplementation(() => ({ status: null, error: new Error('No such container') }))
     await expect(backend.stop('mca-teros-bash')).resolves.toBeUndefined()
@@ -583,6 +602,20 @@ describe('cleanupOrphans', () => {
 
     const rmCalls = dockerCalls().filter((a) => a[0] === 'rm')
     expect(rmCalls.map((a) => a[2])).toEqual(['mca-a', 'mca-b'])
+    // A single parallel `docker stop` first, so MCAs can flush state.
+    expect(dockerCalls().filter((a) => a[0] === 'stop')).toEqual([['stop', '--time', '5', 'mca-a', 'mca-b']])
+  })
+
+  it('filtra por MCA_CONTAINER_PREFIX para no tocar contenedores de otro stack', async () => {
+    process.env.MCA_CONTAINER_PREFIX = 'dev-'
+    try {
+      spawnScript.mockImplementation((args) => (args[0] === 'ps' ? { status: 0, stdout: '' } : { status: 0 }))
+      const backend = new DockerContainerBackend(makeConfig())
+      await backend.cleanupOrphans()
+      expect(dockerCalls()[0]).toContain('name=^dev-mca-')
+    } finally {
+      delete process.env.MCA_CONTAINER_PREFIX
+    }
   })
 
   it('un nombre unsafe devuelto por docker se SALTA pero el resto se limpia', async () => {
@@ -595,6 +628,7 @@ describe('cleanupOrphans', () => {
 
     const rmCalls = dockerCalls().filter((a) => a[0] === 'rm')
     expect(rmCalls.map((a) => a[2])).toEqual(['mca-a', 'mca-b'])
+    expect(dockerCalls().filter((a) => a[0] === 'stop')).toEqual([['stop', '--time', '5', 'mca-a', 'mca-b']])
   })
 
   it('docker ps falla → best-effort, no crashea; sin output → no rm', async () => {

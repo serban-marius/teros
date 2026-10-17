@@ -17,6 +17,7 @@ import { BillingApi } from './BillingApi'
 import { BoardApi } from './BoardApi'
 import { ChannelApi } from './ChannelApi'
 import { DesktopStateApi } from './DesktopStateApi'
+import { ComputerApi } from './ComputerApi'
 import { FeatureFlagApi } from './FeatureFlagApi'
 import { FeedbackApi } from './FeedbackApi'
 import { FileBrowserApi } from './FileBrowserApi'
@@ -46,6 +47,7 @@ export class TerosClient {
   readonly fileShare: FileShareApi
   readonly fileBrowser: FileBrowserApi
   readonly desktopState: DesktopStateApi
+  readonly computer: ComputerApi
   readonly featureFlags: FeatureFlagApi
   readonly feedback: FeedbackApi
   readonly billing: BillingApi
@@ -71,6 +73,7 @@ export class TerosClient {
     )
     this.fileBrowser  = new FileBrowserApi(transport)
     this.desktopState = new DesktopStateApi(transport)
+    this.computer     = new ComputerApi(transport)
     this.featureFlags = new FeatureFlagApi(transport)
     this.feedback     = new FeedbackApi(transport)
     this.billing      = new BillingApi(transport)

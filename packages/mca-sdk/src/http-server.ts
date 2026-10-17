@@ -9,8 +9,10 @@
  * - GET /tools/list - List available tools
  * - GET /health - Health check
  * - POST /shutdown - Graceful shutdown
- *
- *
+ * - Extension routes registered with httpRoute()/wsRoute() (e.g. a live view an
+ *   MCA serves itself). These require `Authorization: Bearer <MCA_CALLBACK_TOKEN>`:
+ *   only the backend holds that token, so the published container port never
+ *   exposes them to anything else.
  */
 
 import type {
@@ -23,8 +25,10 @@ import type {
   McaToolsListResponse,
 } from '@teros/shared';
 import { generateMessageId, MCA_PROTOCOL_VERSION, McaErrorCode } from '@teros/shared';
+import { timingSafeEqual } from 'node:crypto';
 import type { Server as HttpServer } from 'http';
 import { createServer, type IncomingMessage, type ServerResponse } from 'http';
+import type { Duplex } from 'node:stream';
 import { McaBackendClient } from './backend-client';
 
 // ============================================================================
@@ -38,6 +42,30 @@ export interface HttpServerConfig {
   host?: string;
   /** Request timeout in ms (default: 120000) */
   timeout?: number;
+}
+
+/** Handler for an extension HTTP route (see McaHttpServer.httpRoute). */
+export type HttpRouteHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void> | void;
+
+/** Handler for an extension WebSocket/upgrade route (see McaHttpServer.wsRoute). */
+export type WsRouteHandler = (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
+
+/**
+ * True when the request carries `Authorization: Bearer <MCA_CALLBACK_TOKEN>`.
+ * Fails closed when the container has no callback token configured.
+ */
+export function isBackendAuthorized(req: IncomingMessage): boolean {
+  const expected = process.env.MCA_CALLBACK_TOKEN;
+  const header = req.headers.authorization;
+  if (!expected || !header?.startsWith('Bearer ')) return false;
+  const given = Buffer.from(header.slice(7));
+  const want = Buffer.from(expected);
+  return given.length === want.length && timingSafeEqual(given, want);
+}
+
+function matchesPrefix(url: string, prefix: string): boolean {
+  return url === prefix || url.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`) ||
+    url.startsWith(`${prefix}?`);
 }
 
 export type ToolHandler = (
@@ -228,6 +256,8 @@ export interface ToolAnnotations {
   irreversible?: boolean;
   /** Teros policy — tool NEVER runs without human confirmation; user 'allow' config is ignored. */
   alwaysAsk?: boolean;
+  /** Teros — acts only inside the agent's own sandbox, visibly (computer GUI input). Allowed by default on an agent's own app instance. */
+  sandboxedHint?: boolean;
   /** MCP spec hint — tool only reads, never mutates state. Clients MAY auto-approve. */
   readOnlyHint?: boolean;
   /** MCP spec hint — tool may modify or delete state irreversibly. Clients SHOULD confirm. */
@@ -439,6 +469,8 @@ export class McaHttpServer {
   private server: HttpServer | null = null;
   private tools = new Map<string, RegisteredTool>();
   private healthCheckFn: HealthCheckFn | null = null;
+  private httpRoutes: Array<{ prefix: string; handler: HttpRouteHandler }> = [];
+  private wsRoutes: Array<{ prefix: string; handler: WsRouteHandler }> = [];
   private startTime = Date.now();
   private mcaId: string;
   private mcaName: string;
@@ -526,6 +558,38 @@ export class McaHttpServer {
   }
 
   /**
+   * Serve extra HTTP endpoints under `prefix` (e.g. '/viewer'). Requests must
+   * carry the backend's bearer token (see isBackendAuthorized); others get 401.
+   */
+  httpRoute(prefix: string, handler: HttpRouteHandler): void {
+    this.httpRoutes.push({ prefix, handler });
+  }
+
+  /**
+   * Accept HTTP upgrades (WebSocket) under `prefix`. Same auth as httpRoute;
+   * unauthorized or unmatched upgrades are rejected and the socket destroyed.
+   */
+  wsRoute(prefix: string, handler: WsRouteHandler): void {
+    this.wsRoutes.push({ prefix, handler });
+  }
+
+  private handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    const url = req.url || '/';
+    const route = this.wsRoutes.find((r) => matchesPrefix(url, r.prefix));
+    if (!route || !isBackendAuthorized(req)) {
+      socket.end(`HTTP/1.1 ${route ? '401 Unauthorized' : '404 Not Found'}\r\n\r\n`);
+      socket.destroy();
+      return;
+    }
+    try {
+      route.handler(req, socket, head);
+    } catch (error) {
+      console.error(`[McaHttpServer:${this.mcaId}] Upgrade handler failed:`, error);
+      socket.destroy();
+    }
+  }
+
+  /**
    * Start the HTTP server
    */
   async start(): Promise<void> {
@@ -538,6 +602,7 @@ export class McaHttpServer {
       });
 
       this.server.timeout = this.httpConfig.timeout;
+      this.server.on('upgrade', (req, socket, head) => this.handleUpgrade(req, socket, head));
 
       this.server.on('error', (error) => {
         reject(error);
@@ -599,6 +664,13 @@ export class McaHttpServer {
       await this.handleToolCall(req, res);
     } else if (url === '/shutdown' && method === 'POST') {
       await this.handleShutdown(req, res);
+    } else if (this.httpRoutes.some((r) => matchesPrefix(url, r.prefix))) {
+      if (!isBackendAuthorized(req)) {
+        this.sendError(res, 401, 'UNAUTHORIZED', 'Backend token required');
+        return;
+      }
+      const route = this.httpRoutes.find((r) => matchesPrefix(url, r.prefix));
+      await route?.handler(req, res);
     } else {
       this.sendError(res, 404, 'NOT_FOUND', `Unknown endpoint: ${method} ${url}`);
     }

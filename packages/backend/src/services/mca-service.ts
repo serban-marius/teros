@@ -437,7 +437,12 @@ export class McaService {
       // (allow for read-only, ask for mutations) unless the caller already
       // decided them. Permissions are pure data from here on — no runtime
       // policy upgrades anything.
-      permissions: app.permissions ?? createInstallPermissions(this.loadStaticToolDefs(app.mcaId)),
+      // An agent's own instance (forAgentId) also allows its sandboxed tools.
+      permissions:
+        app.permissions ??
+        createInstallPermissions(this.loadStaticToolDefs(app.mcaId), {
+          forAgent: !!app.forAgentId,
+        }),
       // Core platform tools (messages, tasks, agent management) are used on
       // nearly every turn — pin them out of the tool-execution proxy so they
       // stay individually listed and skip the discovery round-trip.
@@ -1146,6 +1151,13 @@ export class McaService {
       const requiredRole = mca.availability?.role || 'user';
       const userHasAccess = hasRequiredRole(requiredRole);
 
+      // Per-agent MCAs: one instance per agent, never deduplicated per owner
+      // (the duplicate repair below would collapse them back into one).
+      if (mca.availability?.perAgent) {
+        if (userHasAccess) await this.ensurePerAgentApp(agentId, mca.mcaId, appOwnerId);
+        continue;
+      }
+
       // Find ALL apps for this owner (user or workspace) with this mcaId to detect duplicates
       const existingApps = await this.appsCollection
         .find({ mcaId: mca.mcaId, ownerId: appOwnerId, ownerType: appOwnerType })
@@ -1276,6 +1288,54 @@ export class McaService {
         }
       }
     }
+  }
+
+  /**
+   * The agent's own instance of a per-agent MCA (availability.perAgent, e.g.
+   * its computer): found by App.forAgentId, created on first use, re-enabled
+   * if disabled, and granted to that agent only. Idempotent.
+   */
+  async ensurePerAgentApp(agentId: string, mcaId: string, ownerId: string): Promise<App> {
+    const mca = await this.getMcaFromCatalog(mcaId);
+    if (!mca?.availability?.perAgent) throw new Error(`${mcaId} is not a per-agent MCA`);
+    if (mca.status !== 'active' || !mca.availability.enabled) throw new Error(`${mcaId} is not enabled`);
+
+    let app: App | null = await this.appsCollection.findOne({ mcaId, ownerId, forAgentId: agentId });
+    if (!app) {
+      const agent = await this.db.collection('agents').findOne({ agentId });
+      const slug = String(agent?.name ?? '')
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 20)
+        .replace(/-+$/, '');
+      const base = mcaId.split('.').pop() as string;
+      const name = await this.generateDefaultAppName(`${base}${slug ? `-${slug}` : ''}`, ownerId);
+      app = await this.createApp({
+        appId: generateAppId(),
+        mcaId,
+        ownerId,
+        ownerType: 'workspace',
+        name,
+        status: 'active',
+        forAgentId: agentId,
+        // The agent's own tool loop (e.g. a computer: every step is a call):
+        // keep it out of the execution proxy so each action isn't a
+        // discovery round trip, and tool names match the MCA's guide.
+        toolExposure: 'direct',
+      });
+      console.log(`[McaService] Created per-agent app ${app.appId} (${name}) of ${mcaId} for agent ${agentId}`);
+    } else if (app.status !== 'active') {
+      await this.appsCollection.updateOne(
+        { appId: app.appId },
+        { $set: { status: 'active', updatedAt: new Date().toISOString() } },
+      );
+    }
+    if (!(await this.hasAccess(agentId, app.appId))) {
+      await this.grantAccess({ agentId, appId: app.appId, grantedBy: 'system' });
+    }
+    return app;
   }
 
   /**

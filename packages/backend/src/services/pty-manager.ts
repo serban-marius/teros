@@ -7,6 +7,7 @@
  */
 
 import * as pty from 'node-pty'
+import { mcaContainerPrefix } from './container-backend'
 import type { PubSubService } from './pubsub-service'
 
 export interface PtySession {
@@ -135,7 +136,7 @@ export class PtyManager {
   static getContainerIdForApp(appId: string): string | null {
     // Container name pattern: mca-teros-bash-{last 8 chars of appId}
     const suffix = appId.replace('app_', '').slice(-8)
-    const containerName = `mca-teros-bash-${suffix}`
+    const containerName = `${mcaContainerPrefix()}mca-teros-bash-${suffix}`
     return containerName
   }
 }

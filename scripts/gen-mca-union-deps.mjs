@@ -14,6 +14,9 @@
 //                                                         the heavy browser stack
 //   docker/mca-runtime-playwright/deps.generated.json  → playwright image, the
 //                                                         FULL union incl. browsers
+//   docker/mca-runtime-computer/deps.generated.json    → computer image: ONLY the
+//                                                         deps of the MCAs it runs
+//                                                         (one per desktop, so lean)
 //
 // Run from repo root (build.sh / deploy-server.sh do this before `docker build`):
 //   node scripts/gen-mca-union-deps.mjs
@@ -64,3 +67,22 @@ function emit(outPath, includeBrowser) {
 
 emit('docker/mca-runtime/deps.generated.json', false);
 emit('docker/mca-runtime-playwright/deps.generated.json', true);
+
+// Dedicated images that serve a single MCA install only that MCA's deps.
+function emitOnly(outPath, mcaIds) {
+  const deps = {};
+  for (const id of mcaIds) {
+    const pkg = JSON.parse(readFileSync(join(MCAS_DIR, id, 'package.json'), 'utf8'));
+    for (const [name, range] of Object.entries(pkg.dependencies || {})) {
+      if (!isNonNpm(name)) deps[name] ??= range;
+    }
+  }
+  const sorted = Object.fromEntries(Object.keys(deps).sort().map((k) => [k, deps[k]]));
+  writeFileSync(
+    join(ROOT, outPath),
+    `${JSON.stringify({ name: 'mca-deps', private: true, dependencies: sorted }, null, 2)}\n`,
+  );
+  console.log(`[gen-mca-union-deps] ${Object.keys(sorted).length} deps -> ${outPath}`);
+}
+
+emitOnly('docker/mca-runtime-computer/deps.generated.json', ['mca.teros.computer']);

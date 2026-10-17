@@ -66,6 +66,30 @@ export interface ContainerStartOptions {
   dockerNetwork?: string;
 }
 
+/**
+ * Optional prefix for every MCA container name (MCA_CONTAINER_PREFIX, default
+ * none). Read by both the core (name generation) and the container agent
+ * (orphan cleanup / status filters), so two Teros stacks sharing one Docker
+ * daemon never see — or `rm -f` — each other's containers.
+ */
+export function mcaContainerPrefix(): string {
+  const prefix = process.env.MCA_CONTAINER_PREFIX ?? '';
+  if (prefix && !/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(prefix)) {
+    throw new Error(`Invalid MCA_CONTAINER_PREFIX "${prefix}": only [a-zA-Z0-9_.-] allowed`);
+  }
+  return prefix;
+}
+
+/**
+ * Named Docker volume holding an app instance's private persistent state
+ * (manifest runtime.appVolume). appIds are [a-zA-Z0-9_]+, so the name is
+ * always a valid volume name and never mistaken for a host path.
+ */
+export function appVolumeName(appId: string): string {
+  if (!/^[a-zA-Z0-9_-]+$/.test(appId)) throw new Error(`Invalid appId for volume name: ${appId}`);
+  return `teros-app-${appId}`;
+}
+
 // ============================================================================
 // INTERFACE
 // ============================================================================

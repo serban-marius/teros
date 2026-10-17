@@ -19,6 +19,7 @@ import { McaHttpClient } from './mca-http-client';
 import type { ManagedMca, ToolDefinition, ExecutionConfig } from './mca-manager.types';
 import type { SpawnContext } from './mca-manager.spawn';
 import { setupWatchdog } from './mca-manager.spawn';
+import { appVolumeName } from './container-backend';
 import { resolveDockerNetwork } from './mca-network-policy';
 
 // This package is ESM ("type": "module") — __dirname must be derived, same as config.ts
@@ -297,6 +298,19 @@ export async function spawnContainer(
       });
       environment.MCA_WORKSPACE_PATH = '/workspace';
       log.info({ appId, workspaceHostPath }, 'Mounted workspace at /workspace');
+    }
+
+    // Private persistent volume per app instance (e.g. mca.teros.computer's home
+    // with the browser profile). A named Docker volume, created on first use on
+    // the execution host: it outlives the container (rm -f, idle stop, backend
+    // restart) and, unlike appDataMount, is not inside the shared workspace volume.
+    if (mca.runtime?.appVolume?.containerPath) {
+      volumes.push({
+        hostPath: appVolumeName(appId),
+        containerPath: mca.runtime.appVolume.containerPath,
+        readOnly: false,
+      });
+      log.info({ appId, volume: appVolumeName(appId) }, 'Mounted private app volume');
     }
 
     // @todo alice - 2026.04.25 : remove this comment once .sessions/ dir is cleaned up from host

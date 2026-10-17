@@ -21,6 +21,7 @@ import type { WsHandlerContext } from '@teros/shared'
 import { HandlerError } from '../../../ws-framework/WsRouter'
 import type { WsRouter } from '../../../ws-framework/WsRouter'
 import type { PubSubService } from '../../../services/pubsub-service'
+import { mcaContainerPrefix } from '../../../services/container-backend'
 import type { PtyManager } from '../../../services/pty-manager'
 import type { McaService } from '../../../services/mca-service'
 import type { McaManager } from '../../../services/mca-manager'
@@ -52,7 +53,7 @@ async function ensureContainerRunning(
 
   // Find the container by appId suffix
   const suffix = appId.replace('app_', '').slice(-8)
-  const pattern = `mca-teros-bash-${suffix}`
+  const pattern = `${mcaContainerPrefix()}mca-teros-bash-${suffix}`
   try {
     const result = exec(`docker ps --filter "name=${pattern}" --format "{{.Names}}"`).trim()
     if (result) return result

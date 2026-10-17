@@ -35,6 +35,7 @@ describe("manifests reales", () => {
     "mca.linear",
     "mca.notion",
     "mca.teros.scheduler",
+    "mca.teros.computer",
   ])("%s parsea con MCAManifestRefinedSchema", (mcaId) => {
     const result = MCAManifestRefinedSchema.safeParse(loadManifest(mcaId))
     if (!result.success) {
@@ -175,5 +176,47 @@ describe("MCAManifestRefinedSchema", () => {
     const result = MCAManifestRefinedSchema.safeParse(manifest)
     expect(result.success).toBe(false)
     expect(issuesOf(result).some((i) => i.path.join(".") === "runtime.containerMode")).toBe(true)
+  })
+})
+
+// ===========================================================================
+// Per-agent instances, private app volumes, agent guide (mca.teros.computer)
+// ===========================================================================
+
+describe("perAgent / appVolume / agentInstructions", () => {
+  const computer = () => loadManifest("mca.teros.computer")
+
+  it("perAgent sin multi → issue", () => {
+    const m = computer()
+    m.availability.multi = false
+    expect(issuesOf(MCAManifestRefinedSchema.safeParse(m)).map((i) => i.message)).toContain(
+      "availability.perAgent requires availability.multi: true (one instance per agent)",
+    )
+  })
+
+  it("perAgent o appVolume en contenedor shared → issue", () => {
+    const m = computer()
+    m.availability.perAgent = false
+    m.availability.multi = false
+    m.runtime.containerMode = "shared"
+    expect(issuesOf(MCAManifestRefinedSchema.safeParse(m)).map((i) => i.message)).toContain(
+      'availability.perAgent and runtime.appVolume require containerMode: "per-app"',
+    )
+  })
+
+  it("appVolume.containerPath debe ser absoluto y sin rarezas", () => {
+    for (const containerPath of ["home/teros", "/home/te ros", "/home/$(id)"]) {
+      const m = computer()
+      m.runtime.appVolume.containerPath = containerPath
+      expect(MCAManifestRefinedSchema.safeParse(m).success).toBe(false)
+    }
+  })
+
+  it("agentInstructions solo acepta un .md del propio directorio", () => {
+    for (const file of ["../secrets.md", "AGENT.txt", "dir/AGENT.md"]) {
+      const m = computer()
+      m.agentInstructions = file
+      expect(MCAManifestRefinedSchema.safeParse(m).success).toBe(false)
+    }
   })
 })

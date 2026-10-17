@@ -1,0 +1,5 @@
+#!/bin/sh
+# Desktop menu → "Browser": ask the computer MCA to start the browser (with its
+# CDP port, profile and flags) or bring its window back. Never runs chromium
+# itself: a browser the MCA didn't start would be invisible to the agent.
+exec kill -USR2 "$(cat "${COMPUTER_PID_FILE:-/tmp/teros-computer.pid}")"

@@ -880,7 +880,8 @@
     "splitBottom": "Dividir abajo",
     "splitHorizontal": "Dividir horizontal",
     "splitVertical": "Dividir vertical",
-    "closePanel": "Cerrar panel"
+    "closePanel": "Cerrar panel",
+    "computer": "Ordenador"
   },
   "archivedConversations": {
     "searchPlaceholder": "Buscar en archivadas...",
@@ -1301,7 +1302,8 @@
       "rolePlaceholder": "p. ej., Asistente Personal",
       "introPlaceholder": "Una breve introducción que el agente usará...",
       "responseStylePlaceholder": "p. ej., amable, formal, conciso"
-    }
+    },
+    "computer": "Ordenador"
   },
   "apps": {
     "searchPlaceholder": "Buscar...",
@@ -2255,5 +2257,19 @@
       "dismiss": "Entendido",
       "progress": "{{current}} de {{total}}"
     }
+  },
+  "computer": {
+    "titleFor": "Ordenador de {{name}}",
+    "subtitle": "Vista en directo",
+    "youAreInControl": "Tienes el control",
+    "agentDriving": "El agente lo está usando",
+    "reconnect": "Reconectar",
+    "openInNewTab": "Abrir en una pestaña nueva",
+    "starting": "Arrancando el ordenador…",
+    "openFailed": "No se pudo abrir el ordenador",
+    "retry": "Reintentar",
+    "iframeTitle": "Vista en directo de {{name}}",
+    "webOnly": "La vista en directo solo está disponible en la web",
+    "openLiveView": "Abrir ordenador"
   }
 }

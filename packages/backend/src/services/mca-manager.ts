@@ -415,6 +415,20 @@ export class McaManager {
   // Lifecycle: kill / cleanup / shutdown
   // ---------------------------------------------------------------------------
 
+  /**
+   * Drop an app's state after its container vanished outside our bookkeeping
+   * (OOM, manual rm, execution-host restart) and start it again. Same recovery
+   * executeTool does on CONNECTION_FAILED, for callers that talk to the
+   * container directly (e.g. the computer live-view proxy).
+   */
+  async respawn(appId: string): Promise<ManagedMca> {
+    const managed = this.mcas.get(appId);
+    this.mcas.delete(appId);
+    this.httpClients.delete(appId);
+    await this.containerManager.stop(managed?.containerKey || appId);
+    return this.getOrSpawn(appId);
+  }
+
   async kill(appId: string): Promise<void> {
     const managed = this.mcas.get(appId);
     if (!managed) return;

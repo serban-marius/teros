@@ -27,6 +27,7 @@ import { HttpShareHandler } from '../handlers/http-share-handler'
 import { HttpUploadHandler } from '../handlers/http-upload-handler'
 import { secrets } from '../secrets/secrets-manager'
 import { getEmailService } from '../services/email-service'
+import type { ComputerViewService } from '../services/computer-view-service'
 import { McaManager } from '../services/mca-manager'
 import { MCAEventSubscriptionService } from '../services/mca-event-subscription-service'
 import { SessionManager } from '../services/session-manager'
@@ -137,6 +138,8 @@ export interface HttpHandlers {
   mcaEventSubscriptionService: MCAEventSubscriptionService
   sessionManager: SessionManager
   mcaManager: McaManager | null
+  /** Live view of agents' computers (/computer/<ticket>/…). Null without MCAs. */
+  computerViewService?: ComputerViewService | null
   /** Mongo-backed rate limiter. Optional: absent disables HTTP rate limiting. */
   rateLimiter?: RateLimiter
   db: Db
@@ -171,6 +174,7 @@ export function createHttpHandler(handlers: HttpHandlers) {
     mcaEventSubscriptionService,
     sessionManager,
     mcaManager,
+    computerViewService,
     rateLimiter,
     db,
   } = handlers
@@ -227,6 +231,11 @@ export function createHttpHandler(handlers: HttpHandlers) {
         )
         return
       }
+    }
+
+    // Agent computer live view (signed ticket in the path — see ComputerViewService).
+    if (computerViewService && url.startsWith('/computer/')) {
+      if (await computerViewService.handleHttp(req, res)) return
     }
 
     // GitHub App webhook (signature-verified — independent of session auth).

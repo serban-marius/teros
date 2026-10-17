@@ -1,0 +1,64 @@
+{
+  "tools": {
+    "-health-check": {
+      "name": "-health-check",
+      "description": "Comprueba que el escritorio y el navegador están en marcha."
+    },
+    "get-state": {
+      "name": "get-state",
+      "description": "Mira tu ordenador: quién tiene el control, la ventana activa, la pestaña del navegador y un snapshot de accesibilidad de la página con referencias de elementos ([ref=e12]) para usar con click/type-text/scroll. Empieza cada tarea con esto. Usa screenshot=true cuando necesites píxeles (diálogos, canvas, imágenes, maquetación)."
+    },
+    "screenshot": {
+      "name": "screenshot",
+      "description": "Captura de toda la pantalla (JPEG, reducida). Las coordenadas que pases después a click/scroll/drag son píxeles de ESTA imagen; el escalado a la pantalla real es automático. Prefiere get-state (texto) cuando el objetivo está en la página web."
+    },
+    "click": {
+      "name": "click",
+      "description": "Haz clic en un elemento por ref (del último snapshot) o en x,y (píxeles de la última captura). Devuelve el estado actualizado. Los clics por ref llegan al elemento; los clics por coordenadas son entrada sintética: revisa el estado devuelto."
+    },
+    "type-text": {
+      "name": "type-text",
+      "description": "Escribe texto. Con ref: rellena ese campo (sustituyendo su contenido salvo clear=false) y lo vuelve a leer (verificado). Sin ref: escribe donde esté el foco del teclado (sin verificar). Nunca escribas contraseñas u otros secretos: pide al usuario que tome el control y las escriba."
+    },
+    "press-key": {
+      "name": "press-key",
+      "description": "Pulsa teclas en la ventana activa: una tecla o combinación, o varias separadas por espacios. Ejemplos: \"Enter\", \"Escape\", \"Tab\", \"ctrl+l\", \"ctrl+shift+t\", \"ctrl+a Delete\", \"PageDown\"."
+    },
+    "scroll": {
+      "name": "scroll",
+      "description": "Desplaza la página o el elemento bajo una ref / punto. amount es en pasos de rueda (~100 px cada uno, 5 por defecto)."
+    },
+    "drag": {
+      "name": "drag",
+      "description": "Arrastra con el botón izquierdo de un punto a otro (píxeles de la última captura)."
+    },
+    "open-url": {
+      "name": "open-url",
+      "description": "Abre una URL en el navegador del escritorio (lo arranca si está cerrado), en la pestaña actual o en una nueva. Espera a que cargue y devuelve su snapshot."
+    },
+    "tabs": {
+      "name": "tabs",
+      "description": "Lista, cambia, cierra o abre pestañas del navegador. Los índices salen de action=list."
+    },
+    "wait": {
+      "name": "wait",
+      "description": "Espera a que aparezca un texto en la página (preferible) o un tiempo fijo, y devuelve el estado."
+    },
+    "run-command": {
+      "name": "run-command",
+      "description": "Ejecuta un comando de shell en tu ordenador como su usuario (bash, en el directorio home) y obtén stdout/stderr. Para archivos (p. ej. ~/Downloads), comprobaciones rápidas y scripts. No es root: no instala paquetes del sistema."
+    },
+    "control-status": {
+      "name": "control-status",
+      "description": "Quién maneja este ordenador ahora: tú (agente) o una persona que tomó el control desde la vista en directo. Mientras una persona tiene el control, tus herramientas de entrada fallan con human_has_control."
+    }
+  },
+  "name": "Ordenador",
+  "description": "Da a un agente su propio escritorio Linux persistente con un navegador real. El agente lo ve y lo maneja (pantalla, árbol de accesibilidad, ratón, teclado); tú puedes verlo en directo y tomar el control para iniciar sesión en cualquier web, y la sesión sigue abierta tras los reinicios.",
+  "tagline": "El ordenador Linux propio de tu agente, con un navegador en el que puedes iniciar sesión",
+  "changelog": [
+    {
+      "notes": "Primera versión: un escritorio y navegador persistentes por agente, vista en directo con toma de control y herramientas de uso del ordenador"
+    }
+  ]
+}

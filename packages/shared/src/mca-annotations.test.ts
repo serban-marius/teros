@@ -29,6 +29,10 @@ describe('McaToolAnnotationsSchema', () => {
     expect(parsed.readOnlyHint).toBe(false);
   });
 
+  it('keeps sandboxedHint (seed hint for an agent’s own app instance)', () => {
+    expect(McaToolAnnotationsSchema.parse({ sandboxedHint: true }).sandboxedHint).toBe(true);
+  });
+
   it('accepts an empty object — every field is optional', () => {
     const parsed = McaToolAnnotationsSchema.parse({});
     expect(parsed.readOnlyHint).toBeUndefined();
@@ -40,6 +44,7 @@ describe('McaToolAnnotationsSchema', () => {
     expect(() => McaToolAnnotationsSchema.parse({ alwaysAsk: 'true' })).toThrow();
     expect(() => McaToolAnnotationsSchema.parse({ irreversible: 'true' })).toThrow();
     expect(() => McaToolAnnotationsSchema.parse({ readOnlyHint: 1 })).toThrow();
+    expect(() => McaToolAnnotationsSchema.parse({ sandboxedHint: 'true' })).toThrow();
   });
 
   it('rejects invalid stability values', () => {

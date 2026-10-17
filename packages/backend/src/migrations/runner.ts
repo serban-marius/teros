@@ -49,6 +49,7 @@ import migration_20260704_003 from './20260704_003_pin_core_apps_direct_exposure
 import migration_20260708_001 from './20260708_001_agent_usage_rollup_runs.js';
 import migration_20260708_002 from './20260708_002_agent_usage_perf_indexes.js';
 import migration_20260708_003 from './20260708_003_agent_usage_access_log.js';
+import migration_20261017_001 from './20261017_001_allow_sandboxed_tools_on_agent_apps.js';
 
 interface MigrationEntry {
   name: string;
@@ -171,6 +172,10 @@ const MIGRATIONS: MigrationEntry[] = [
   {
     name: '20260708_003_agent_usage_access_log',
     migration: migration_20260708_003,
+  },
+  {
+    name: '20261017_001_allow_sandboxed_tools_on_agent_apps',
+    migration: migration_20261017_001,
   },
 ];
 

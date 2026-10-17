@@ -589,3 +589,73 @@ describe("OpenAICompatibleLLMAdapter — TER-707/CTX-016 request-shape after pro
     expect(toolResultMsg.tool_call_id).toBe("call_a")
   })
 })
+
+describe("OpenAICompatibleLLMAdapter — tool-result images (screenshots)", () => {
+  type Part = { type: string; image_url?: { url: string } }
+  type Converted = Array<{ role: string; content?: string | Part[] | null }>
+  type ImageFile = { url: string }
+
+  function toolPart(callID: string, url?: string) {
+    return {
+      type: "tool",
+      callID,
+      tool: "computer_screenshot",
+      state: {
+        status: "completed",
+        input: {},
+        output: `shot ${callID}`,
+        ...(url ? { attachments: [{ type: "file", mime: "image/jpeg", url, filename: "screen.jpg" }] } : {}),
+      },
+    }
+  }
+  function assistantWithTools(...parts: unknown[]): MessageWithParts {
+    return { info: { role: "assistant" }, parts } as unknown as MessageWithParts
+  }
+  function visionAdapter(model = "acme-vision-1"): OpenAICompatibleLLMAdapter {
+    const adapter = new OpenAICompatibleLLMAdapter({ baseUrl: "https://llm.test/v1", model, apiKey: "k" })
+    const pipeline = (adapter as unknown as { imagePipeline: { processImages: unknown } }).imagePipeline
+    pipeline.processImages = async (files: ImageFile[]) =>
+      new Map(files.map((f) => [f.url, { base64: `b64:${f.url}`, mimeType: "image/jpeg" }]))
+    return adapter
+  }
+  function convert(adapter: OpenAICompatibleLLMAdapter, messages: MessageWithParts[]): Promise<Converted> {
+    return (adapter as unknown as { convertMessages: (m: MessageWithParts[]) => Promise<Converted> }).convertMessages(
+      messages,
+    )
+  }
+  const imageUrls = (out: Converted) =>
+    out
+      .filter((m) => m.role === "user" && Array.isArray(m.content))
+      .flatMap((m) => (m.content as Part[]).filter((p) => p.type === "image_url").map((p) => p.image_url?.url))
+
+  it("sends the images after the tool messages, as a user message", async () => {
+    const out = await convert(visionAdapter(), [
+      userMessage("look"),
+      assistantWithTools(toolPart("c1", "https://files.test/a.jpg")),
+    ])
+    expect(out.map((m) => m.role)).toEqual(["user", "assistant", "tool", "user"])
+    expect(imageUrls(out)).toEqual(["data:image/jpeg;base64,b64:https://files.test/a.jpg"])
+  })
+
+  it("keeps only the 2 most recent screenshots", async () => {
+    const out = await convert(visionAdapter(), [
+      userMessage("go"),
+      assistantWithTools(toolPart("c1", "https://files.test/1.jpg")),
+      assistantWithTools(toolPart("c2", "https://files.test/2.jpg"), toolPart("c3", "https://files.test/3.jpg")),
+    ])
+    expect(imageUrls(out)).toEqual([
+      "data:image/jpeg;base64,b64:https://files.test/2.jpg",
+      "data:image/jpeg;base64,b64:https://files.test/3.jpg",
+    ])
+    // The tool results themselves (text) are all still there.
+    expect(out.filter((m) => m.role === "tool")).toHaveLength(3)
+  })
+
+  it("sends no images to a model without vision", async () => {
+    const out = await convert(visionAdapter("plain-text-model"), [
+      userMessage("look"),
+      assistantWithTools(toolPart("c1", "https://files.test/a.jpg")),
+    ])
+    expect(out.map((m) => m.role)).toEqual(["user", "assistant", "tool"])
+  })
+})
